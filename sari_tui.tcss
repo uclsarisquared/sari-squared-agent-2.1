@@ -1,0 +1,60 @@
+#input_text {
+    height: 4;
+    scrollbar-size: 1 1;
+}
+
+#enter_button {
+    height: 4;
+}
+
+LLMInput {
+    dock: bottom;
+}
+
+UserPrompt {
+    border: round $secondary;
+    border-title-align: right;
+    align-vertical: middle;
+    align-horizontal: right;
+    margin-left: 10;
+}
+
+LLMToolCallDisplay {
+    border: panel $secondary-muted;
+    border-title-align: center;
+    height: 3;
+    align: center middle;
+}
+
+LLMThinkingSummary {
+    margin: 0;
+}
+
+#user_llm_screen {
+    layout: vertical;
+    scrollbar-size: 1 1;
+}
+
+#thinking_collapsible {
+    background: $boost 75%;
+    opacity: 50%;
+}
+
+#log_collapsible {
+    background: $background;
+    color: $background;
+}
+
+#raw_log {
+    height: 10;
+}
+
+LLMResponse {
+    border: round $primary;
+    align-vertical: middle;
+}
+
+.tool_success {
+    color: $success;
+    border: panel $success;
+}

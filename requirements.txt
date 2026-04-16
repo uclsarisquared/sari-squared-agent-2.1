@@ -1,0 +1,7 @@
+openai
+textual
+python-socketio
+mcp
+eventlet
+requests
+websocket-client
