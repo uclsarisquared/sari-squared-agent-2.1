@@ -514,53 +514,53 @@ AGENT_TOOLS = [
 async def _dispatch(name: str, args: dict):
     # Navigation
     if name == "move_forward":
-        return await _repeat_transform_agent((0, 0, 0.1), (0, 0, 0), args["units"])
+        return await _repeat_transform_agent((0, 0, 0.1), (0, 0, 0), int(args["units"]))
     if name == "move_backward":
-        return await _repeat_transform_agent((0, 0, -0.1), (0, 0, 0), args["units"])
+        return await _repeat_transform_agent((0, 0, -0.1), (0, 0, 0), int(args["units"]))
     if name == "move_left":
-        return await _repeat_transform_agent((-0.1, 0, 0), (0, 0, 0), args["units"])
+        return await _repeat_transform_agent((-0.1, 0, 0), (0, 0, 0), int(args["units"]))
     if name == "move_right":
-        return await _repeat_transform_agent((0.1, 0, 0), (0, 0, 0), args["units"])
+        return await _repeat_transform_agent((0.1, 0, 0), (0, 0, 0), int(args["units"]))
 
     # Camera
     if name == "pan_left":
-        return await _repeat_transform_agent((0, 0, 0), (0, -2.5, 0), args["units"])
+        return await _repeat_transform_agent((0, 0, 0), (0, -2.5, 0), int(args["units"]))
     if name == "pan_right":
-        return await _repeat_transform_agent((0, 0, 0), (0, 2.5, 0), args["units"])
+        return await _repeat_transform_agent((0, 0, 0), (0, 2.5, 0), int(args["units"]))
     if name == "tilt_up":
-        return await _repeat_transform_agent((0, 0, 0), (-2.5, 0, 0), args["units"])
+        return await _repeat_transform_agent((0, 0, 0), (-2.5, 0, 0), int(args["units"]))
     if name == "tilt_down":
-        return await _repeat_transform_agent((0, 0, 0), (2.5, 0, 0), args["units"])
+        return await _repeat_transform_agent((0, 0, 0), (2.5, 0, 0), int(args["units"]))
 
     # Hand extension/retraction
     if name == "extend_left_hand_forward":
-        return await _repeat_transform_hands((0, 0, 0.025), (0, 0, 0), (0, 0, 0), (0, 0, 0), args["units"])
+        return await _repeat_transform_hands((0, 0, 0.025), (0, 0, 0), (0, 0, 0), (0, 0, 0), int(args["units"]))
     if name == "pull_left_hand_backward":
-        return await _repeat_transform_hands((0, 0, -0.025), (0, 0, 0), (0, 0, 0), (0, 0, 0), args["units"])
+        return await _repeat_transform_hands((0, 0, -0.025), (0, 0, 0), (0, 0, 0), (0, 0, 0), int(args["units"]))
     if name == "extend_right_hand_forward":
-        return await _repeat_transform_hands((0, 0, 0), (0, 0, 0), (0, 0, 0.025), (0, 0, 0), args["units"])
+        return await _repeat_transform_hands((0, 0, 0), (0, 0, 0), (0, 0, 0.025), (0, 0, 0), int(args["units"]))
     if name == "pull_right_hand_backward":
-        return await _repeat_transform_hands((0, 0, 0), (0, 0, 0), (0, 0, -0.025), (0, 0, 0), args["units"])
+        return await _repeat_transform_hands((0, 0, 0), (0, 0, 0), (0, 0, -0.025), (0, 0, 0), int(args["units"]))
 
     # Hand raise/lower
     if name == "raise_left_hand":
-        return await _repeat_transform_hands((0, 0.025, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), args["units"])
+        return await _repeat_transform_hands((0, 0.025, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), int(args["units"]))
     if name == "lower_left_hand":
-        return await _repeat_transform_hands((0, -0.025, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), args["units"])
+        return await _repeat_transform_hands((0, -0.025, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), int(args["units"]))
     if name == "raise_right_hand":
-        return await _repeat_transform_hands((0, 0, 0), (0, 0, 0), (0, 0.025, 0), (0, 0, 0), args["units"])
+        return await _repeat_transform_hands((0, 0, 0), (0, 0, 0), (0, 0.025, 0), (0, 0, 0), int(args["units"]))
     if name == "lower_right_hand":
-        return await _repeat_transform_hands((0, 0, 0), (0, 0, 0), (0, -0.025, 0), (0, 0, 0), args["units"])
+        return await _repeat_transform_hands((0, 0, 0), (0, 0, 0), (0, -0.025, 0), (0, 0, 0), int(args["units"]))
 
     # Hand rotation
     if name == "rotate_left_hand_clockwise":
-        return await _repeat_transform_hands((0, 0, 0), (0, 15, 0), (0, 0, 0), (0, 0, 0), args["units"])
+        return await _repeat_transform_hands((0, 0, 0), (0, 15, 0), (0, 0, 0), (0, 0, 0), int(args["units"]))
     if name == "rotate_left_hand_counterclockwise":
-        return await _repeat_transform_hands((0, 0, 0), (0, -15, 0), (0, 0, 0), (0, 0, 0), args["units"])
+        return await _repeat_transform_hands((0, 0, 0), (0, -15, 0), (0, 0, 0), (0, 0, 0), int(args["units"]))
     if name == "rotate_right_hand_clockwise":
-        return await _repeat_transform_hands((0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 15, 0), args["units"])
+        return await _repeat_transform_hands((0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 15, 0), int(args["units"]))
     if name == "rotate_right_hand_counterclockwise":
-        return await _repeat_transform_hands((0, 0, 0), (0, 0, 0), (0, 0, 0), (0, -15, 0), args["units"])
+        return await _repeat_transform_hands((0, 0, 0), (0, 0, 0), (0, 0, 0), (0, -15, 0), int(args["units"]))
 
     # Grips
     if name == "toggle_left_grip":
@@ -626,7 +626,7 @@ async def _dispatch(name: str, args: dict):
 # Public handler (sync wrapper for use in non-async callers)
 # ---------------------------------------------------------------------------
 
-def handle_agent_tool_call(tool_name: str, arguments: dict, call_id: str) -> str:
+async def handle_agent_tool_call(tool_name: str, arguments: dict, call_id: str) -> str:
     """Execute a tool and return a JSON-encoded function_call_output dict.
 
     Args:
@@ -638,7 +638,7 @@ def handle_agent_tool_call(tool_name: str, arguments: dict, call_id: str) -> str
         JSON string suitable for passing back to the Claude API as a
         tool_result / function_call_output message.
     """
-    result = asyncio.run(_dispatch(tool_name, arguments))
+    result = await _dispatch(tool_name, arguments)
     return json.dumps({
         "type": "function_call_output",
         "call_id": call_id,

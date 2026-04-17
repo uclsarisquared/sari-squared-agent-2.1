@@ -141,8 +141,8 @@ class LLMResponse(VerticalGroup):
                 case "response.output_item.done":
                     # LLM response finished generating
 
-                    # Only if it's a "text generation" event
-                    if event.item.type == "message":
+                    # Only if it's a "text generation" event with actual content
+                    if event.item.type == "message" and event.item.content:
                         completed_text = event.item.content[0].text
                         append_to_chat_log("assistant", completed_text)
 
@@ -166,8 +166,9 @@ class LLMResponse(VerticalGroup):
                 case "response.function_call_arguments.done":
                     args = json.loads(tool_call_string)
                     tool_call_display.append_func_args(tool_call_string)
+                    tool_call_string = ""
 
-                    tool_response = handle_agent_tool_call(args, tool_call_id)
+                    tool_response = await handle_agent_tool_call(tool_call_display.tool_name, args, tool_call_id)
                     tool_call_display.tool_done()
 
                     await self.parent.mount(
