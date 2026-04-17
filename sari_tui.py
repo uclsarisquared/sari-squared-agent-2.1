@@ -10,12 +10,12 @@ import os
 
 # Configuration
 DEBUG = False
-MODEL_NAME = "Qwen/Qwen3.5-27B"
+MODEL_NAME = "gpt-5.4"
 
 # Make sure to set OPENAI_API_KEY environment variable
 client = AsyncOpenAI(
-    base_url=os.environ['UCL_MODEL_BASE_URL']+":8000/v1",
-    api_key="key" # use for model server without auth
+    #base_url=os.environ['UCL_MODEL_BASE_URL']+":8000/v1",
+    #api_key="key" # use for model server without auth
 )
 
 chat_log = []
@@ -104,6 +104,7 @@ class LLMResponse(VerticalGroup):
 
         tool_call_string = ""
         tool_call_id = None
+        tool_call_name = None
         tool_call_display = None
 
         # tool-continuation calls pass prompt=None; skip adding a user message
@@ -144,14 +145,6 @@ class LLMResponse(VerticalGroup):
                     if event.item.type == "message" and event.item.content:
                         # Text response — add to chat log
                         append_to_chat_log("assistant", event.item.content[0].text)
-                    elif event.item.type == "function_call":
-                        # Add the model's function_call item to the input for the next turn
-                        chat_log.append({
-                            "type": "function_call",
-                            "id": event.item.call_id,
-                            "name": event.item.name,
-                            "arguments": event.item.arguments,
-                        })
 
                 case "response.reasoning_summary_part.done":
                     # LLM finished reasoning, hide `Thinking` collapsible
@@ -160,6 +153,7 @@ class LLMResponse(VerticalGroup):
                 case "response.output_item.added":
                     if event.item.type == "function_call":
                         tool_call_id = event.item.call_id
+                        tool_call_name = event.item.name
                         tool_call_display = LLMToolCallDisplay(event.item.name)
 
                         await self.mount(
@@ -174,7 +168,19 @@ class LLMResponse(VerticalGroup):
                     tool_call_display.append_func_args(tool_call_string)
                     tool_call_string = ""
 
-                    result = await dispatch_tool(tool_call_display.tool_name, args)
+                    # Add function_call to history before the output so the API
+                    # always sees a matching call_id for the function_call_output.
+                    chat_log.append({
+                        "type": "function_call",
+                        "call_id": tool_call_id,
+                        "name": tool_call_name,
+                        "arguments": json.dumps(args),
+                    })
+
+                    try:
+                        result = await dispatch_tool(tool_call_display.tool_name, args)
+                    except Exception as e:
+                        result = {"error": str(e)}
                     tool_call_display.tool_done()
 
                     if isinstance(result, dict) and "image_base64" in result:
