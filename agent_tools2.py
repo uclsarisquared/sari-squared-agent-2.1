@@ -623,24 +623,9 @@ async def _dispatch(name: str, args: dict):
 
 
 # ---------------------------------------------------------------------------
-# Public handler (sync wrapper for use in non-async callers)
+# Public handler
 # ---------------------------------------------------------------------------
 
-async def handle_agent_tool_call(tool_name: str, arguments: dict, call_id: str) -> str:
-    """Execute a tool and return a JSON-encoded function_call_output dict.
-
-    Args:
-        tool_name:  Name of the tool (matches a name in AGENT_TOOLS).
-        arguments:  Parsed argument dict from the model.
-        call_id:    The call_id from the model's tool_use block.
-
-    Returns:
-        JSON string suitable for passing back to the Claude API as a
-        tool_result / function_call_output message.
-    """
-    result = await _dispatch(tool_name, arguments)
-    return json.dumps({
-        "type": "function_call_output",
-        "call_id": call_id,
-        "output": json.dumps(result, default=list),
-    })
+async def dispatch_tool(tool_name: str, arguments: dict) -> dict:
+    """Execute a tool and return the raw result dict."""
+    return await _dispatch(tool_name, arguments)

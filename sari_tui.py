@@ -4,7 +4,7 @@ from textual.app import App, ComposeResult
 from textual.containers import VerticalGroup, VerticalScroll, HorizontalGroup
 from textual.widgets import Markdown, LoadingIndicator, TextArea, Header, \
     RichLog, Button, Collapsible, Label
-from agent_tools2 import *
+from agent_tools2 import AGENT_TOOLS, dispatch_tool
 import json
 import os
 
@@ -73,7 +73,7 @@ class LLMResponse(VerticalGroup):
 
     BORDER_TITLE = MODEL_NAME
 
-    def __init__(self, prompt: str) -> None:
+    def __init__(self, prompt: str | None) -> None:
         self.prompt = prompt
         super().__init__()
 
@@ -106,7 +106,9 @@ class LLMResponse(VerticalGroup):
         tool_call_id = None
         tool_call_display = None
 
-        append_to_chat_log("user", self.prompt)
+        # tool-continuation calls pass prompt=None; skip adding a user message
+        if self.prompt is not None:
+            append_to_chat_log("user", self.prompt)
 
         # noinspection PyTypeChecker
         stream = await client.responses.create(
@@ -139,13 +141,17 @@ class LLMResponse(VerticalGroup):
                     self.query_one(LLMThinkingSummary).update_thinking_text(event.delta)
 
                 case "response.output_item.done":
-                    # LLM response finished generating
-
-                    # Only if it's a "text generation" event with actual content
                     if event.item.type == "message" and event.item.content:
-                        completed_text = event.item.content[0].text
-                        append_to_chat_log("assistant", completed_text)
-
+                        # Text response — add to chat log
+                        append_to_chat_log("assistant", event.item.content[0].text)
+                    elif event.item.type == "function_call":
+                        # Add the model's function_call item to the input for the next turn
+                        chat_log.append({
+                            "type": "function_call",
+                            "id": event.item.call_id,
+                            "name": event.item.name,
+                            "arguments": event.item.arguments,
+                        })
 
                 case "response.reasoning_summary_part.done":
                     # LLM finished reasoning, hide `Thinking` collapsible
@@ -168,14 +174,34 @@ class LLMResponse(VerticalGroup):
                     tool_call_display.append_func_args(tool_call_string)
                     tool_call_string = ""
 
-                    tool_response = await handle_agent_tool_call(tool_call_display.tool_name, args, tool_call_id)
+                    result = await dispatch_tool(tool_call_display.tool_name, args)
                     tool_call_display.tool_done()
 
-                    await self.parent.mount(
-                        LLMResponse(
-                            tool_response
-                        )
-                    )
+                    if isinstance(result, dict) and "image_base64" in result:
+                        # Image result: add function_call_output with a placeholder,
+                        # then pass the actual image as an input_image content block
+                        # so it doesn't bloat the context as a plain text string.
+                        chat_log.append({
+                            "type": "function_call_output",
+                            "call_id": tool_call_id,
+                            "output": "Screenshot captured.",
+                        })
+                        chat_log.append({
+                            "role": "user",
+                            "content": [{
+                                "type": "input_image",
+                                "image_url": f"data:{result['mimeType']};base64,{result['image_base64']}",
+                            }],
+                        })
+                    else:
+                        chat_log.append({
+                            "type": "function_call_output",
+                            "call_id": tool_call_id,
+                            "output": json.dumps(result, default=list),
+                        })
+
+                    # Continue the conversation; prompt=None skips adding a user message
+                    await self.parent.mount(LLMResponse(None))
 
 
 
