@@ -8,10 +8,12 @@ Sandbox WebSocket at ws://localhost:8080/commands.
 
 import asyncio
 import base64
+import io
 import json
 import re
 
 import websockets
+from PIL import Image
 
 # ---------------------------------------------------------------------------
 # WebSocket helpers (mirrors old_agent_server.py)
@@ -21,10 +23,13 @@ WS_URI = "ws://localhost:8080/commands"
 UNIT_CAP = 10
 
 
-async def _send(command: dict) -> bytes | str:
+SCREENSHOT_TIMEOUT = 15  # seconds; screenshots can be slow to render
+
+
+async def _send(command: dict, timeout: float | None = 10.0) -> bytes | str:
     async with websockets.connect(WS_URI, max_size=None) as ws:
         await ws.send(json.dumps(command))
-        return await ws.recv()
+        return await asyncio.wait_for(ws.recv(), timeout=timeout)
 
 
 def _parse_agent_state(text: str) -> dict:
@@ -596,8 +601,13 @@ async def _dispatch(name: str, args: dict):
             "suffix": "",
             "folder_name": "screenshots",
             "save_image": False,
-        })
-        b64 = base64.b64encode(raw if isinstance(raw, bytes) else raw.encode()).decode("utf-8")
+        }, timeout=SCREENSHOT_TIMEOUT)
+        img_bytes = raw if isinstance(raw, bytes) else raw.encode()
+        img = Image.open(io.BytesIO(img_bytes))
+        img.thumbnail((512, 512), Image.LANCZOS)
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
         return {"image_base64": b64, "mimeType": "image/png"}
     if name == "get_scene_json":
         return await _send({"command": "RequestJson"})
