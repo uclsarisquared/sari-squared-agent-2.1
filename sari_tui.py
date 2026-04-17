@@ -4,15 +4,19 @@ from textual.app import App, ComposeResult
 from textual.containers import VerticalGroup, VerticalScroll, HorizontalGroup
 from textual.widgets import Markdown, LoadingIndicator, TextArea, Header, \
     RichLog, Button, Collapsible, Label
-from agent_tools import *
+from agent_tools2 import *
 import json
+import os
 
 # Configuration
 DEBUG = False
-MODEL_NAME = "gpt-5.4-mini"
+MODEL_NAME = "Qwen/Qwen3.5-27B"
 
 # Make sure to set OPENAI_API_KEY environment variable
-client = AsyncOpenAI()
+client = AsyncOpenAI(
+    base_url=os.environ['UCL_MODEL_BASE_URL']+":8000/v1",
+    api_key="key" # use for model server without auth
+)
 
 chat_log = []
 
