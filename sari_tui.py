@@ -9,7 +9,7 @@ import json
 import os
 
 # Configuration
-DEBUG = False
+DEBUG = True
 MODEL_NAME = "gpt-5.4"
 
 # Make sure to set OPENAI_API_KEY environment variable
@@ -168,20 +168,21 @@ class LLMResponse(VerticalGroup):
                     tool_call_display.append_func_args(tool_call_string)
                     tool_call_string = ""
 
-                    # Add function_call to history before the output so the API
-                    # always sees a matching call_id for the function_call_output.
+                    try:
+                        result = await dispatch_tool(tool_call_display.tool_name, args)
+                    except Exception as e:
+                        result = {"error": str(e)}
+                    tool_call_display.tool_done()
+
+                    # Append function_call and function_call_output together after
+                    # dispatch_tool returns so chat_log is never left with an
+                    # unmatched function_call during the await.
                     chat_log.append({
                         "type": "function_call",
                         "call_id": tool_call_id,
                         "name": tool_call_name,
                         "arguments": json.dumps(args),
                     })
-
-                    try:
-                        result = await dispatch_tool(tool_call_display.tool_name, args)
-                    except Exception as e:
-                        result = {"error": str(e)}
-                    tool_call_display.tool_done()
 
                     if isinstance(result, dict) and "image_base64" in result:
                         # Image result: add function_call_output with a placeholder,

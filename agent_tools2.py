@@ -84,8 +84,7 @@ async def _repeat_transform_hands(l_trans, l_rot, r_trans, r_rot, units: int) ->
 # Tool schemas
 # ---------------------------------------------------------------------------
 
-AGENT_TOOLS = [
-    # --- Navigation ---
+NAVIGATION_TOOLS = [
     {
         "type": "function",
         "name": "move_forward",
@@ -142,7 +141,6 @@ AGENT_TOOLS = [
             "additionalProperties": False,
         },
     },
-    # --- Camera ---
     {
         "type": "function",
         "name": "pan_left",
@@ -199,7 +197,31 @@ AGENT_TOOLS = [
             "additionalProperties": False,
         },
     },
-    # --- Hand extension/retraction ---
+    {
+        "type": "function",
+        "name": "transform_agent",
+        "description": (
+            "Apply an arbitrary single-step translation and rotation to the agent. "
+            "Coordinates are in the agent's local frame."
+        ),
+        "strict": True,
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "tx": {"type": "number", "description": "X translation (metres, left/right)."},
+                "ty": {"type": "number", "description": "Y translation (metres, up/down)."},
+                "tz": {"type": "number", "description": "Z translation (metres, forward/backward)."},
+                "rx": {"type": "number", "description": "Pitch delta (degrees, tilt up/down)."},
+                "ry": {"type": "number", "description": "Yaw delta (degrees, pan left/right)."},
+                "rz": {"type": "number", "description": "Roll delta (degrees)."},
+            },
+            "required": ["tx", "ty", "tz", "rx", "ry", "rz"],
+            "additionalProperties": False,
+        },
+    },
+]
+
+MANIPULATION_TOOLS = [
     {
         "type": "function",
         "name": "extend_left_hand_forward",
@@ -256,7 +278,6 @@ AGENT_TOOLS = [
             "additionalProperties": False,
         },
     },
-    # --- Hand raise/lower ---
     {
         "type": "function",
         "name": "raise_left_hand",
@@ -313,7 +334,6 @@ AGENT_TOOLS = [
             "additionalProperties": False,
         },
     },
-    # --- Hand rotation ---
     {
         "type": "function",
         "name": "rotate_left_hand_clockwise",
@@ -370,7 +390,6 @@ AGENT_TOOLS = [
             "additionalProperties": False,
         },
     },
-    # --- Grips ---
     {
         "type": "function",
         "name": "toggle_left_grip",
@@ -392,29 +411,6 @@ AGENT_TOOLS = [
             "type": "object",
             "properties": {},
             "required": [],
-            "additionalProperties": False,
-        },
-    },
-    # --- Raw transforms ---
-    {
-        "type": "function",
-        "name": "transform_agent",
-        "description": (
-            "Apply an arbitrary single-step translation and rotation to the agent. "
-            "Coordinates are in the agent's local frame."
-        ),
-        "strict": True,
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "tx": {"type": "number", "description": "X translation (metres, left/right)."},
-                "ty": {"type": "number", "description": "Y translation (metres, up/down)."},
-                "tz": {"type": "number", "description": "Z translation (metres, forward/backward)."},
-                "rx": {"type": "number", "description": "Pitch delta (degrees, tilt up/down)."},
-                "ry": {"type": "number", "description": "Yaw delta (degrees, pan left/right)."},
-                "rz": {"type": "number", "description": "Roll delta (degrees)."},
-            },
-            "required": ["tx", "ty", "tz", "rx", "ry", "rz"],
             "additionalProperties": False,
         },
     },
@@ -447,7 +443,9 @@ AGENT_TOOLS = [
             "additionalProperties": False,
         },
     },
-    # --- Perception ---
+]
+
+PERCEPTION_TOOLS = [
     {
         "type": "function",
         "name": "get_current_view",
@@ -472,7 +470,6 @@ AGENT_TOOLS = [
             "additionalProperties": False,
         },
     },
-    # --- Utility ---
     {
         "type": "function",
         "name": "get_agent_state",
@@ -510,6 +507,8 @@ AGENT_TOOLS = [
         },
     },
 ]
+
+AGENT_TOOLS = NAVIGATION_TOOLS + MANIPULATION_TOOLS + PERCEPTION_TOOLS
 
 
 # ---------------------------------------------------------------------------
