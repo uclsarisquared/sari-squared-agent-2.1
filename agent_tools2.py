@@ -508,6 +508,38 @@ PERCEPTION_TOOLS = [
     },
 ]
 
+TOOL_MODE_MAP: dict[str, str] = (
+    {tool["name"]: "navigation"   for tool in NAVIGATION_TOOLS}
+    | {tool["name"]: "manipulation" for tool in MANIPULATION_TOOLS}
+    | {tool["name"]: "perception"   for tool in PERCEPTION_TOOLS}
+)
+
+SWITCH_MODE_TOOL = {
+    "type": "function",
+    "name": "switch_mode",
+    "description": (
+        "Switch the agent's active tool mode. "
+        "You MUST call this before using tools from a different category. "
+        "Available modes: 'navigation' (movement and camera), "
+        "'manipulation' (hands and grips), "
+        "'perception' (camera view, scene state, environment reset)."
+    ),
+    "strict": True,
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "mode": {
+                "type": "string",
+                "enum": ["navigation", "manipulation", "perception"],
+                "description": "The mode to switch to.",
+            }
+        },
+        "required": ["mode"],
+        "additionalProperties": False,
+    },
+}
+
+# Combined list kept for convenience; sari_tui.py uses the per-category lists directly.
 AGENT_TOOLS = NAVIGATION_TOOLS + MANIPULATION_TOOLS + PERCEPTION_TOOLS
 
 

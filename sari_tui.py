@@ -4,13 +4,17 @@ from textual.app import App, ComposeResult
 from textual.containers import VerticalGroup, VerticalScroll, HorizontalGroup
 from textual.widgets import Markdown, LoadingIndicator, TextArea, Header, \
     RichLog, Button, Collapsible, Label
-from agent_tools2 import AGENT_TOOLS, dispatch_tool
+from agent_tools2 import NAVIGATION_TOOLS, MANIPULATION_TOOLS, PERCEPTION_TOOLS, SWITCH_MODE_TOOL, TOOL_MODE_MAP, dispatch_tool
 import json
 import os
 
 # Configuration
 DEBUG = True
 MODEL_NAME = "gpt-5.4"
+
+ALL_TOOLS = NAVIGATION_TOOLS + MANIPULATION_TOOLS + PERCEPTION_TOOLS + [SWITCH_MODE_TOOL]
+
+current_mode = "navigation"
 
 # Make sure to set OPENAI_API_KEY environment variable
 client = AsyncOpenAI(
@@ -73,8 +77,9 @@ class LLMResponse(VerticalGroup):
 
     BORDER_TITLE = MODEL_NAME
 
-    def __init__(self, prompt: str | None) -> None:
+    def __init__(self, prompt: str | None, mode: str = "navigation") -> None:
         self.prompt = prompt
+        self.mode = mode
         super().__init__()
 
     def compose(self) -> ComposeResult:
@@ -101,6 +106,7 @@ class LLMResponse(VerticalGroup):
 
     @work(exclusive=True)
     async def stream_from_llm_api(self):
+        global current_mode
 
         tool_call_string = ""
         tool_call_id = None
@@ -119,7 +125,7 @@ class LLMResponse(VerticalGroup):
                 "effort": "low",
                 "summary": "auto"
             },
-            tools=AGENT_TOOLS,
+            tools=ALL_TOOLS,
             stream=True,
         )
 
@@ -168,10 +174,19 @@ class LLMResponse(VerticalGroup):
                     tool_call_display.append_func_args(tool_call_string)
                     tool_call_string = ""
 
-                    try:
-                        result = await dispatch_tool(tool_call_display.tool_name, args)
-                    except Exception as e:
-                        result = {"error": str(e)}
+                    if tool_call_display.tool_name == "switch_mode":
+                        new_mode = args["mode"]
+                        current_mode = new_mode
+                        self.mode = new_mode
+                        self.app.query_one(ModeDisplay).update_mode(new_mode)
+                        result = {"switched_to": new_mode}
+                    elif (required_mode := TOOL_MODE_MAP.get(tool_call_display.tool_name)) and required_mode != self.mode:
+                        result = {"error": f"Mode mismatch: '{tool_call_display.tool_name}' requires '{required_mode}' mode. Call switch_mode(\"{required_mode}\") first."}
+                    else:
+                        try:
+                            result = await dispatch_tool(tool_call_display.tool_name, args)
+                        except Exception as e:
+                            result = {"error": str(e)}
                     tool_call_display.tool_done()
 
                     # Append function_call and function_call_output together after
@@ -208,7 +223,7 @@ class LLMResponse(VerticalGroup):
                         })
 
                     # Continue the conversation; prompt=None skips adding a user message
-                    await self.parent.mount(LLMResponse(None))
+                    await self.parent.mount(LLMResponse(None, self.mode))
 
 
 
@@ -222,6 +237,15 @@ class UserPrompt(VerticalGroup):
 
     def compose(self) -> ComposeResult:
         yield Markdown(markdown=self.prompt, classes="user_prompt")
+
+
+class ModeDisplay(HorizontalGroup):
+
+    def compose(self) -> ComposeResult:
+        yield Label(f"Agent mode: {current_mode}", id="mode_display")
+
+    def update_mode(self, mode: str) -> None:
+        self.query_one("#mode_display", Label).update(f"Agent mode: {mode}")
 
 
 class LLMInput(HorizontalGroup):
@@ -242,7 +266,7 @@ class LLMInput(HorizontalGroup):
             self.query_one(TextArea).text = ""
 
             self.parent.query_one(VerticalScroll).mount(
-                LLMResponse(user_input)
+                LLMResponse(user_input, current_mode)
             )
 
     def compose(self) -> ComposeResult:
@@ -258,6 +282,7 @@ class SariApp(App):
     def compose(self) -> ComposeResult:
         yield Header()
         yield VerticalScroll(id="user_llm_screen")
+        yield ModeDisplay()
         yield LLMInput()
 
     def on_mount(self) -> None:
