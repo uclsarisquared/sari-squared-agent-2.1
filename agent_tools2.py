@@ -22,6 +22,10 @@ from PIL import Image
 WS_URI = "ws://localhost:8080/commands"
 UNIT_CAP = 10
 
+# Grip state tracking — prevents the agent from double-toggling
+_left_gripped: bool = False
+_right_gripped: bool = False
+
 
 SCREENSHOT_TIMEOUT = 15  # seconds; screenshots can be slow to render
 
@@ -392,8 +396,20 @@ MANIPULATION_TOOLS = [
     },
     # {
     #     "type": "function",
-    #     "name": "toggle_left_grip",
-    #     "description": "Toggle the left hand grip open ↔ closed.",
+    #     "name": "grip_left",
+    #     "description": "Close the left hand grip to grab an object. No-op if the grip is already closed.",
+    #     "strict": True,
+    #     "parameters": {
+    #         "type": "object",
+    #         "properties": {},
+    #         "required": [],
+    #         "additionalProperties": False,
+    #     },
+    # },
+    # {
+    #     "type": "function",
+    #     "name": "release_left",
+    #     "description": "Open the left hand grip to release an object. No-op if the grip is already open.",
     #     "strict": True,
     #     "parameters": {
     #         "type": "object",
@@ -404,8 +420,20 @@ MANIPULATION_TOOLS = [
     # },
     {
         "type": "function",
-        "name": "toggle_right_grip",
-        "description": "Toggle the right hand grip open ↔ closed.",
+        "name": "grip_right",
+        "description": "Close the right hand grip to grab an object. No-op if the grip is already closed.",
+        "strict": True,
+        "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "type": "function",
+        "name": "release_right",
+        "description": "Open the right hand grip to release an object. No-op if the grip is already open.",
         "strict": True,
         "parameters": {
             "type": "object",
@@ -521,7 +549,7 @@ SWITCH_MODE_TOOL = {
         "Switch the agent's active tool mode. "
         "You MUST call this before using tools from a different category. "
         "Available modes: 'navigation' (movement and camera), "
-        "'manipulation' (hands and grips), "
+        "'manipulation' (hands and grips, recommended to stay in this only when the objective item is centered and in reach), "
         "'perception' (camera view, scene state, environment reset)."
     ),
     "strict": True,
@@ -548,6 +576,8 @@ AGENT_TOOLS = NAVIGATION_TOOLS + MANIPULATION_TOOLS + PERCEPTION_TOOLS
 # ---------------------------------------------------------------------------
 
 async def _dispatch(name: str, args: dict):
+    global _left_gripped, _right_gripped
+
     # Navigation
     if name == "move_forward":
         return await _repeat_transform_agent((0, 0, 0.1), (0, 0, 0), int(args["units"]))
@@ -598,13 +628,27 @@ async def _dispatch(name: str, args: dict):
     if name == "rotate_right_hand_counterclockwise":
         return await _repeat_transform_hands((0, 0, 0), (0, 0, 0), (0, 0, 0), (0, -15, 0), int(args["units"]))
 
-    # Grips
-    if name == "toggle_left_grip":
-        raw = await _send({"command": "ToggleLeftGrip"})
-        return {"gripped": "True" in raw}
-    if name == "toggle_right_grip":
-        raw = await _send({"command": "ToggleRightGrip"})
-        return {"gripped": "True" in raw}
+    # Grips — idempotent: only send the toggle if state needs to change
+    if name == "grip_left":
+        if not _left_gripped:
+            await _send({"command": "ToggleLeftGrip"})
+            _left_gripped = True
+        return {"gripped": True}
+    if name == "release_left":
+        if _left_gripped:
+            await _send({"command": "ToggleLeftGrip"})
+            _left_gripped = False
+        return {"gripped": False}
+    if name == "grip_right":
+        if not _right_gripped:
+            await _send({"command": "ToggleRightGrip"})
+            _right_gripped = True
+        return {"gripped": True}
+    if name == "release_right":
+        if _right_gripped:
+            await _send({"command": "ToggleRightGrip"})
+            _right_gripped = False
+        return {"gripped": False}
 
     # Raw transforms
     if name == "transform_agent":

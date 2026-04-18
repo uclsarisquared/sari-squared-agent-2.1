@@ -9,7 +9,7 @@ import json
 import os
 
 # Configuration
-DEBUG = True
+DEBUG = False
 MODEL_NAME = "gpt-5.4"
 
 ALL_TOOLS = NAVIGATION_TOOLS + MANIPULATION_TOOLS + PERCEPTION_TOOLS + [SWITCH_MODE_TOOL]
@@ -127,6 +127,7 @@ class LLMResponse(VerticalGroup):
             },
             tools=ALL_TOOLS,
             stream=True,
+            parallel_tool_calls=False  # This disables parallel calling
         )
 
         async for event in stream:
