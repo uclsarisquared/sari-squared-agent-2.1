@@ -222,34 +222,34 @@ NAVIGATION_TOOLS = [
 ]
 
 MANIPULATION_TOOLS = [
-    {
-        "type": "function",
-        "name": "extend_left_hand_forward",
-        "description": "Extend the left hand forward. Each unit moves the hand 0.025 metres forward. Maximum 10 units per call.",
-        "strict": True,
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "units": {"type": "integer", "description": "Number of 0.025-metre steps (1–10)."},
-            },
-            "required": ["units"],
-            "additionalProperties": False,
-        },
-    },
-    {
-        "type": "function",
-        "name": "pull_left_hand_backward",
-        "description": "Retract the left hand backward. Each unit moves the hand 0.025 metres backward. Maximum 10 units per call.",
-        "strict": True,
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "units": {"type": "integer", "description": "Number of 0.025-metre steps (1–10)."},
-            },
-            "required": ["units"],
-            "additionalProperties": False,
-        },
-    },
+    # {
+    #     "type": "function",
+    #     "name": "extend_left_hand_forward",
+    #     "description": "Extend the left hand forward. Each unit moves the hand 0.025 metres forward. Maximum 10 units per call.",
+    #     "strict": True,
+    #     "parameters": {
+    #         "type": "object",
+    #         "properties": {
+    #             "units": {"type": "integer", "description": "Number of 0.025-metre steps (1–10)."},
+    #         },
+    #         "required": ["units"],
+    #         "additionalProperties": False,
+    #     },
+    # },
+    # {
+    #     "type": "function",
+    #     "name": "pull_left_hand_backward",
+    #     "description": "Retract the left hand backward. Each unit moves the hand 0.025 metres backward. Maximum 10 units per call.",
+    #     "strict": True,
+    #     "parameters": {
+    #         "type": "object",
+    #         "properties": {
+    #             "units": {"type": "integer", "description": "Number of 0.025-metre steps (1–10)."},
+    #         },
+    #         "required": ["units"],
+    #         "additionalProperties": False,
+    #     },
+    # },
     {
         "type": "function",
         "name": "extend_right_hand_forward",
@@ -278,34 +278,34 @@ MANIPULATION_TOOLS = [
             "additionalProperties": False,
         },
     },
-    {
-        "type": "function",
-        "name": "raise_left_hand",
-        "description": "Raise the left hand upward. Each unit raises the hand 0.025 metres. Maximum 10 units per call.",
-        "strict": True,
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "units": {"type": "integer", "description": "Number of 0.025-metre steps (1–10)."},
-            },
-            "required": ["units"],
-            "additionalProperties": False,
-        },
-    },
-    {
-        "type": "function",
-        "name": "lower_left_hand",
-        "description": "Lower the left hand downward. Each unit lowers the hand 0.025 metres. Maximum 10 units per call.",
-        "strict": True,
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "units": {"type": "integer", "description": "Number of 0.025-metre steps (1–10)."},
-            },
-            "required": ["units"],
-            "additionalProperties": False,
-        },
-    },
+    # {
+    #     "type": "function",
+    #     "name": "raise_left_hand",
+    #     "description": "Raise the left hand upward. Each unit raises the hand 0.025 metres. Maximum 10 units per call.",
+    #     "strict": True,
+    #     "parameters": {
+    #         "type": "object",
+    #         "properties": {
+    #             "units": {"type": "integer", "description": "Number of 0.025-metre steps (1–10)."},
+    #         },
+    #         "required": ["units"],
+    #         "additionalProperties": False,
+    #     },
+    # },
+    # {
+    #     "type": "function",
+    #     "name": "lower_left_hand",
+    #     "description": "Lower the left hand downward. Each unit lowers the hand 0.025 metres. Maximum 10 units per call.",
+    #     "strict": True,
+    #     "parameters": {
+    #         "type": "object",
+    #         "properties": {
+    #             "units": {"type": "integer", "description": "Number of 0.025-metre steps (1–10)."},
+    #         },
+    #         "required": ["units"],
+    #         "additionalProperties": False,
+    #     },
+    # },
     {
         "type": "function",
         "name": "raise_right_hand",
@@ -334,34 +334,34 @@ MANIPULATION_TOOLS = [
             "additionalProperties": False,
         },
     },
-    {
-        "type": "function",
-        "name": "rotate_left_hand_clockwise",
-        "description": "Rotate the left hand clockwise. Each unit rotates 15 degrees.",
-        "strict": True,
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "units": {"type": "integer", "description": "Number of 15-degree steps."},
-            },
-            "required": ["units"],
-            "additionalProperties": False,
-        },
-    },
-    {
-        "type": "function",
-        "name": "rotate_left_hand_counterclockwise",
-        "description": "Rotate the left hand counterclockwise. Each unit rotates 15 degrees.",
-        "strict": True,
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "units": {"type": "integer", "description": "Number of 15-degree steps."},
-            },
-            "required": ["units"],
-            "additionalProperties": False,
-        },
-    },
+    # {
+    #     "type": "function",
+    #     "name": "rotate_left_hand_clockwise",
+    #     "description": "Rotate the left hand clockwise. Each unit rotates 15 degrees.",
+    #     "strict": True,
+    #     "parameters": {
+    #         "type": "object",
+    #         "properties": {
+    #             "units": {"type": "integer", "description": "Number of 15-degree steps."},
+    #         },
+    #         "required": ["units"],
+    #         "additionalProperties": False,
+    #     },
+    # },
+    # {
+    #     "type": "function",
+    #     "name": "rotate_left_hand_counterclockwise",
+    #     "description": "Rotate the left hand counterclockwise. Each unit rotates 15 degrees.",
+    #     "strict": True,
+    #     "parameters": {
+    #         "type": "object",
+    #         "properties": {
+    #             "units": {"type": "integer", "description": "Number of 15-degree steps."},
+    #         },
+    #         "required": ["units"],
+    #         "additionalProperties": False,
+    #     },
+    # },
     {
         "type": "function",
         "name": "rotate_right_hand_clockwise",
@@ -390,18 +390,18 @@ MANIPULATION_TOOLS = [
             "additionalProperties": False,
         },
     },
-    {
-        "type": "function",
-        "name": "toggle_left_grip",
-        "description": "Toggle the left hand grip open ↔ closed.",
-        "strict": True,
-        "parameters": {
-            "type": "object",
-            "properties": {},
-            "required": [],
-            "additionalProperties": False,
-        },
-    },
+    # {
+    #     "type": "function",
+    #     "name": "toggle_left_grip",
+    #     "description": "Toggle the left hand grip open ↔ closed.",
+    #     "strict": True,
+    #     "parameters": {
+    #         "type": "object",
+    #         "properties": {},
+    #         "required": [],
+    #         "additionalProperties": False,
+    #     },
+    # },
     {
         "type": "function",
         "name": "toggle_right_grip",
