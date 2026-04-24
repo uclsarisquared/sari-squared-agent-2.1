@@ -10,7 +10,7 @@ import os
 
 # Configuration
 DEBUG = False
-MODEL_NAME = "gpt-5.4"
+MODEL_NAME = "qwen/qwen3.5-27b"
 
 ALL_TOOLS = NAVIGATION_TOOLS + MANIPULATION_TOOLS + PERCEPTION_TOOLS + [SWITCH_MODE_TOOL]
 
@@ -18,6 +18,8 @@ current_mode = "navigation"
 
 # Make sure to set OPENAI_API_KEY environment variable
 client = AsyncOpenAI(
+    base_url="https://openrouter.ai/api/v1",
+    api_key=os.environ['SARI_OPENROUTER_API_KEY']
     #base_url=os.environ['UCL_MODEL_BASE_URL']+":8000/v1",
     #api_key="key" # use for model server without auth
 )
@@ -121,6 +123,7 @@ class LLMResponse(VerticalGroup):
         stream = await client.responses.create(
             model=MODEL_NAME,
             input=chat_log,
+            max_output_tokens=65536,
             reasoning={
                 "effort": "low",
                 "summary": "auto"

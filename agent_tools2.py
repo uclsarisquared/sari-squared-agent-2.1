@@ -486,18 +486,18 @@ PERCEPTION_TOOLS = [
             "additionalProperties": False,
         },
     },
-    {
-        "type": "function",
-        "name": "get_scene_json",
-        "description": "Request the scene's structured JSON state from the sandbox.",
-        "strict": True,
-        "parameters": {
-            "type": "object",
-            "properties": {},
-            "required": [],
-            "additionalProperties": False,
-        },
-    },
+    # {
+    #     "type": "function",
+    #     "name": "get_scene_json",
+    #     "description": "Request the scene's structured JSON state from the sandbox.",
+    #     "strict": True,
+    #     "parameters": {
+    #         "type": "object",
+    #         "properties": {},
+    #         "required": [],
+    #         "additionalProperties": False,
+    #     },
+    # },
     {
         "type": "function",
         "name": "get_agent_state",
