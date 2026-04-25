@@ -240,7 +240,7 @@ class UserPrompt(VerticalGroup):
         super().__init__()
 
     def compose(self) -> ComposeResult:
-        yield Markdown(markdown=self.prompt, classes="user_prompt")
+        yield Markdown(markdown=self.prompt, id="user_prompt")
 
 
 class ModeDisplay(HorizontalGroup):

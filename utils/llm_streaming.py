@@ -1,0 +1,121 @@
+import json
+from agent_tools3 import dispatch_tool, TOOL_MODE_MAP
+from textual.widgets import LoadingIndicator, RichLog, Markdown
+from utils.agent_utils import build_system_instruction, append_to_chat_log, synthesize_episodic_memory
+
+
+async def stream_from_llm_api(widget, client, model_name, chat_log, all_tools, debug, mode_setter):
+    # Lazy import avoids a circular dependency: sari_tui2 → llm_streaming → sari_tui2.
+    # By call time all modules are fully loaded so this is safe.
+    from sari_tui2 import LLMThinkingSummary, LLMToolCallDisplay, ModeDisplay, LLMResponse
+
+    tool_call_string = ""
+    tool_call_id = None
+    tool_call_name = None
+    tool_call_display = None
+    spawned_continuation = False
+
+    if widget.prompt is not None:
+        append_to_chat_log(chat_log, "user", widget.prompt)
+
+    # noinspection PyTypeChecker
+    stream = await client.responses.create(
+        model=model_name,
+        instructions=build_system_instruction(),
+        input=chat_log,
+        max_output_tokens=65536,
+        reasoning={
+            "effort": "low",
+            "summary": "auto"
+        },
+        tools=all_tools,
+        stream=True,
+        parallel_tool_calls=False
+    )
+
+    async for event in stream:
+        widget.query_one(LoadingIndicator).display = False
+
+        if debug:
+            widget.query_one(RichLog).write(str(event))
+            widget.query_one(RichLog).write(event.type)
+
+        match event.type:
+            case "response.output_text.delta":
+                await widget.query_one(Markdown).append(str(event.delta))
+
+            case "response.reasoning_summary_part.added":
+                widget.query_one(LLMThinkingSummary).display = True
+
+            case "response.reasoning_summary_text.delta":
+                widget.query_one(LLMThinkingSummary).update_thinking_text(event.delta)
+
+            case "response.output_item.done":
+                if event.item.type == "message" and event.item.content:
+                    append_to_chat_log(chat_log, "assistant", event.item.content[0].text)
+
+            case "response.reasoning_summary_part.done":
+                widget.query_one(LLMThinkingSummary).done_thinking()
+
+            case "response.output_item.added":
+                if event.item.type == "function_call":
+                    tool_call_id = event.item.call_id
+                    tool_call_name = event.item.name
+                    tool_call_display = LLMToolCallDisplay(event.item.name)
+                    await widget.mount(tool_call_display)
+
+            case "response.function_call_arguments.delta":
+                tool_call_string += event.delta
+
+            case "response.function_call_arguments.done":
+                args = json.loads(tool_call_string)
+                tool_call_display.append_func_args(tool_call_string)
+                tool_call_string = ""
+
+                if tool_call_display.tool_name == "switch_mode":
+                    new_mode = args["mode"]
+                    mode_setter(new_mode)
+                    widget.mode = new_mode
+                    widget.app.query_one(ModeDisplay).update_mode(new_mode)
+                    result = {"switched_to": new_mode}
+                elif (required_mode := TOOL_MODE_MAP.get(tool_call_display.tool_name)) and required_mode != widget.mode:
+                    result = {"error": f"Mode mismatch: '{tool_call_display.tool_name}' requires '{required_mode}' mode. Call switch_mode(\"{required_mode}\") first."}
+                else:
+                    try:
+                        result = await dispatch_tool(tool_call_display.tool_name, args)
+                    except Exception as e:
+                        result = {"error": str(e)}
+                tool_call_display.tool_done()
+
+                chat_log.append({
+                    "type": "function_call",
+                    "call_id": tool_call_id,
+                    "name": tool_call_name,
+                    "arguments": json.dumps(args),
+                })
+
+                if isinstance(result, dict) and "image_base64" in result:
+                    chat_log.append({
+                        "type": "function_call_output",
+                        "call_id": tool_call_id,
+                        "output": "Screenshot captured.",
+                    })
+                    chat_log.append({
+                        "role": "user",
+                        "content": [{
+                            "type": "input_image",
+                            "image_url": f"data:{result['mimeType']};base64,{result['image_base64']}",
+                        }],
+                    })
+                else:
+                    chat_log.append({
+                        "type": "function_call_output",
+                        "call_id": tool_call_id,
+                        "output": json.dumps(result, default=list),
+                    })
+
+                spawned_continuation = True
+                await widget.parent.mount(LLMResponse(None, widget.mode))
+
+    if not spawned_continuation:
+        await synthesize_episodic_memory(client, model_name, chat_log)

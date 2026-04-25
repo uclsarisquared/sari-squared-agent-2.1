@@ -1,15 +1,15 @@
-from textual import work
+from textual import work, on
 from openai import AsyncOpenAI, APIConnectionError
 from textual.app import App, ComposeResult
 from textual.containers import VerticalGroup, VerticalScroll, HorizontalGroup
 from textual.widgets import Markdown, LoadingIndicator, TextArea, Header, \
-    RichLog, Button, Collapsible, Label
+    RichLog, Button, Collapsible, Label, Input, Static
 from agent_tools3 import (NAVIGATION_TOOLS, MANIPULATION_TOOLS, PERCEPTION_TOOLS,
-                           MEMORY_TOOLS, SWITCH_MODE_TOOL, TOOL_MODE_MAP, dispatch_tool,
-                           load_semantic_memory, load_episodic_memory, save_episodic_memory)
+                           MEMORY_TOOLS, SWITCH_MODE_TOOL, load_semantic_memory)
+from utils.utils import SARI_THEME
+from utils.llm_streaming import stream_from_llm_api as _stream_from_llm_api
 import json
 import os
-import re
 
 # Configuration
 DEBUG = False
@@ -25,96 +25,6 @@ client = AsyncOpenAI(
 )
 
 chat_log = []
-
-# ---------------------------------------------------------------------------
-# Episodic synthesis prompt — matches the Gemini version's output schema
-# ---------------------------------------------------------------------------
-
-EPISODIC_SYNTHESIS_INSTRUCTION = (
-    "You are a memory synthesis module for an embodied agent. "
-    "Given a recent agent-environment exchange, return ONLY a valid JSON object "
-    "(no markdown fences, no extra text) with exactly these four keys:\n"
-    "  dense_summary  — 1-2 sentence summary of what happened\n"
-    "  surprise       — anything unexpected or that contradicted prior beliefs\n"
-    "  what_worked    — actions or strategies that were effective\n"
-    "  what_to_avoid  — actions or approaches that failed or should not be repeated"
-)
-
-
-# ---------------------------------------------------------------------------
-# Memory helpers
-# ---------------------------------------------------------------------------
-
-def build_system_instruction() -> str:
-    """Build the system prompt, injecting current semantic and episodic memory."""
-    facts = load_semantic_memory()
-    episodic = load_episodic_memory()
-
-    parts = [
-        "You are Sari, an embodied agent operating in a 3D environment. "
-        "Use your tools to navigate, manipulate objects, and perceive the scene. "
-        "Use memory tools to store important facts and recall them across interactions. "
-        "Always switch to the correct mode before using navigation, manipulation, or perception tools."
-    ]
-
-    if facts:
-        facts_str = "\n".join(f"- {f}" for f in facts)
-        parts.append(f"\n## SEMANTIC MEMORY\n{facts_str}")
-
-    if episodic:
-        parts.append(
-            f"\n## EPISODIC MEMORY (last session)\n"
-            f"- Summary: {episodic.get('dense_summary', 'N/A')}\n"
-            f"- Surprise: {episodic.get('surprise', 'N/A')}\n"
-            f"- What worked: {episodic.get('what_worked', 'N/A')}\n"
-            f"- What to avoid: {episodic.get('what_to_avoid', 'N/A')}"
-        )
-
-    return "\n".join(parts)
-
-
-async def synthesize_episodic_memory() -> None:
-    """Run a post-turn LLM call to synthesize episodic memory from the last exchange."""
-    # Collect the tail of the chat log as readable text, skipping image blocks
-    exchange_parts = []
-    for msg in chat_log[-10:]:
-        role = msg.get("role") or msg.get("type", "")
-        content = msg.get("content") or msg.get("output") or msg.get("arguments", "")
-        if isinstance(content, str) and content.strip():
-            exchange_parts.append(f"{role}: {content.strip()}")
-
-    if not exchange_parts:
-        return
-
-    exchange_text = "\n\n".join(exchange_parts)
-
-    try:
-        response = await client.responses.create(
-            model=MODEL_NAME,
-            instructions=EPISODIC_SYNTHESIS_INSTRUCTION,
-            input=[{"role": "user", "content": exchange_text}],
-            max_output_tokens=512,
-        )
-
-        text = ""
-        for item in response.output:
-            if hasattr(item, "content"):
-                for part in item.content:
-                    if hasattr(part, "text"):
-                        text += part.text
-
-        match = re.search(r'\{[\s\S]*\}', text)
-        if match:
-            entry = json.loads(match.group())
-            save_episodic_memory(entry)
-    except Exception:
-        pass  # episodic synthesis is best-effort; never block the main flow
-
-
-def append_to_chat_log(role, message):
-    global chat_log
-    chat_log.append({"role": role, "content": message})
-
 
 # ---------------------------------------------------------------------------
 # TUI Widgets
@@ -186,119 +96,11 @@ class LLMResponse(VerticalGroup):
 
     @work(exclusive=True)
     async def stream_from_llm_api(self):
-        global current_mode
+        def _set_mode(mode: str):
+            global current_mode
+            current_mode = mode
 
-        tool_call_string = ""
-        tool_call_id = None
-        tool_call_name = None
-        tool_call_display = None
-        spawned_continuation = False
-
-        if self.prompt is not None:
-            append_to_chat_log("user", self.prompt)
-
-        # noinspection PyTypeChecker
-        stream = await client.responses.create(
-            model=MODEL_NAME,
-            instructions=build_system_instruction(),
-            input=chat_log,
-            max_output_tokens=65536,
-            reasoning={
-                "effort": "low",
-                "summary": "auto"
-            },
-            tools=ALL_TOOLS,
-            stream=True,
-            parallel_tool_calls=False
-        )
-
-        async for event in stream:
-            self.query_one(LoadingIndicator).display = False
-
-            if DEBUG:
-                self.query_one(RichLog).write(str(event))
-                self.query_one(RichLog).write(event.type)
-
-            match event.type:
-                case "response.output_text.delta":
-                    await self.query_one(Markdown).append(str(event.delta))
-
-                case "response.reasoning_summary_part.added":
-                    self.query_one(LLMThinkingSummary).display = True
-
-                case "response.reasoning_summary_text.delta":
-                    self.query_one(LLMThinkingSummary).update_thinking_text(event.delta)
-
-                case "response.output_item.done":
-                    if event.item.type == "message" and event.item.content:
-                        append_to_chat_log("assistant", event.item.content[0].text)
-
-                case "response.reasoning_summary_part.done":
-                    self.query_one(LLMThinkingSummary).done_thinking()
-
-                case "response.output_item.added":
-                    if event.item.type == "function_call":
-                        tool_call_id = event.item.call_id
-                        tool_call_name = event.item.name
-                        tool_call_display = LLMToolCallDisplay(event.item.name)
-                        await self.mount(tool_call_display)
-
-                case "response.function_call_arguments.delta":
-                    tool_call_string += event.delta
-
-                case "response.function_call_arguments.done":
-                    args = json.loads(tool_call_string)
-                    tool_call_display.append_func_args(tool_call_string)
-                    tool_call_string = ""
-
-                    if tool_call_display.tool_name == "switch_mode":
-                        new_mode = args["mode"]
-                        current_mode = new_mode
-                        self.mode = new_mode
-                        self.app.query_one(ModeDisplay).update_mode(new_mode)
-                        result = {"switched_to": new_mode}
-                    elif (required_mode := TOOL_MODE_MAP.get(tool_call_display.tool_name)) and required_mode != self.mode:
-                        result = {"error": f"Mode mismatch: '{tool_call_display.tool_name}' requires '{required_mode}' mode. Call switch_mode(\"{required_mode}\") first."}
-                    else:
-                        try:
-                            result = await dispatch_tool(tool_call_display.tool_name, args)
-                        except Exception as e:
-                            result = {"error": str(e)}
-                    tool_call_display.tool_done()
-
-                    chat_log.append({
-                        "type": "function_call",
-                        "call_id": tool_call_id,
-                        "name": tool_call_name,
-                        "arguments": json.dumps(args),
-                    })
-
-                    if isinstance(result, dict) and "image_base64" in result:
-                        chat_log.append({
-                            "type": "function_call_output",
-                            "call_id": tool_call_id,
-                            "output": "Screenshot captured.",
-                        })
-                        chat_log.append({
-                            "role": "user",
-                            "content": [{
-                                "type": "input_image",
-                                "image_url": f"data:{result['mimeType']};base64,{result['image_base64']}",
-                            }],
-                        })
-                    else:
-                        chat_log.append({
-                            "type": "function_call_output",
-                            "call_id": tool_call_id,
-                            "output": json.dumps(result, default=list),
-                        })
-
-                    spawned_continuation = True
-                    await self.parent.mount(LLMResponse(None, self.mode))
-
-        # Turn is complete — synthesize episodic memory in the background
-        if not spawned_continuation:
-            await synthesize_episodic_memory()
+        await _stream_from_llm_api(self, client, MODEL_NAME, chat_log, ALL_TOOLS, DEBUG, _set_mode)
 
 
 class UserPrompt(VerticalGroup):
@@ -310,7 +112,7 @@ class UserPrompt(VerticalGroup):
         super().__init__()
 
     def compose(self) -> ComposeResult:
-        yield Markdown(markdown=self.prompt, classes="user_prompt")
+        yield Markdown(markdown="❯ " + self.prompt, classes="user_prompt")
 
 
 class MemoryDisplay(HorizontalGroup):
@@ -337,21 +139,21 @@ class ModeDisplay(HorizontalGroup):
 
 class LLMInput(HorizontalGroup):
 
-    def on_button_pressed(self, event: Button) -> None:
-        if event.button.id == "enter_button":
-            user_input = self.query_one(TextArea).text
+    @on(Input.Submitted)
+    def on_button_pressed(self) -> None:
+        user_input = self.query_one(Input).value
 
-            if not user_input:
-                return
+        if not user_input:
+            return
 
-            self.parent.query_one(VerticalScroll).mount(UserPrompt(user_input))
-            self.parent.sub_title = user_input
-            self.query_one(TextArea).text = ""
-            self.parent.query_one(VerticalScroll).mount(LLMResponse(user_input, current_mode))
+        self.parent.query_one(VerticalScroll).mount(UserPrompt(user_input))
+        self.parent.sub_title = user_input
+        self.query_one(Input).value = ""
+        self.parent.query_one(VerticalScroll).mount(LLMResponse(user_input, current_mode))
 
     def compose(self) -> ComposeResult:
-        yield TextArea(placeholder="Enter Sari prompt here...", id="input_text")
-        yield Button(label="↵", id="enter_button")
+        yield Static(content="❯",id="input_arrow")
+        yield Input(placeholder="Enter Sari prompt here...", compact=True, id="input_text")
 
 
 class SariApp(App):
@@ -362,13 +164,14 @@ class SariApp(App):
     def compose(self) -> ComposeResult:
         yield Header()
         yield VerticalScroll(id="user_llm_screen")
+        yield LLMInput()
         yield MemoryDisplay()
         yield ModeDisplay()
-        yield LLMInput()
 
     def on_mount(self) -> None:
         self.sub_title = ""
-        self.theme = "gruvbox"
+        self.register_theme(SARI_THEME)
+        self.theme = "sari"
 
 
 if __name__ == "__main__":
