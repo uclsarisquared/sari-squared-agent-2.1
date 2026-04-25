@@ -47,14 +47,14 @@ async def stream_from_llm_api(widget, client, model_name, chat_log, all_tools, d
             case "response.reasoning_summary_part.added":
                 widget.query_one(LLMThinkingSummary).display = True
 
-            case "response.reasoning_summary_text.delta":
+            case "response.reasoning_summary_text.delta" | "response.reasoning_text.delta":
                 widget.query_one(LLMThinkingSummary).update_thinking_text(event.delta)
 
             case "response.output_item.done":
                 if event.item.type == "message" and event.item.content:
                     append_to_chat_log(chat_log, "assistant", event.item.content[0].text)
 
-            case "response.reasoning_summary_part.done":
+            case "response.reasoning_summary_part.done" | "response.reasoning_text.done":
                 widget.query_one(LLMThinkingSummary).done_thinking()
 
             case "response.output_item.added":
@@ -63,6 +63,8 @@ async def stream_from_llm_api(widget, client, model_name, chat_log, all_tools, d
                     tool_call_name = event.item.name
                     tool_call_display = LLMToolCallDisplay(event.item.name)
                     await widget.mount(tool_call_display)
+                if event.item.type == "reasoning":
+                    widget.query_one(LLMThinkingSummary).display = True
 
             case "response.function_call_arguments.delta":
                 tool_call_string += event.delta

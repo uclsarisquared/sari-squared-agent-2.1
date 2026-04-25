@@ -3,19 +3,20 @@ from openai import AsyncOpenAI, APIConnectionError
 from textual.app import App, ComposeResult
 from textual.containers import VerticalGroup, VerticalScroll, HorizontalGroup
 from textual.widgets import Markdown, LoadingIndicator, TextArea, Header, \
-    RichLog, Button, Collapsible, Label, Input, Static
+    RichLog, Collapsible, Label, Input, Static
 from agent_tools3 import (NAVIGATION_TOOLS, MANIPULATION_TOOLS, PERCEPTION_TOOLS,
                            MEMORY_TOOLS, SWITCH_MODE_TOOL, load_semantic_memory)
 from utils.utils import SARI_THEME
 from utils.llm_streaming import stream_from_llm_api as _stream_from_llm_api
-import json
 import os
+from utils.tui_widgets import WELCOME_TEXT
 
 # Configuration
 DEBUG = False
 MODEL_NAME = "qwen/qwen3.5-27b"
 
-ALL_TOOLS = NAVIGATION_TOOLS + MANIPULATION_TOOLS + PERCEPTION_TOOLS + MEMORY_TOOLS + [SWITCH_MODE_TOOL]
+# ALL_TOOLS = NAVIGATION_TOOLS + MANIPULATION_TOOLS + PERCEPTION_TOOLS + MEMORY_TOOLS + [SWITCH_MODE_TOOL]
+ALL_TOOLS = []
 
 current_mode = "navigation"
 
@@ -84,7 +85,9 @@ class LLMResponse(VerticalGroup):
         llm_thinking.display = False
         yield llm_thinking
 
-        yield Markdown()
+        with HorizontalGroup():
+            yield Static("⏺", id="llm_resp_bullet")
+            yield Markdown(id="llm_response_text")
 
         if DEBUG:
             yield RichLog(highlight=True, id="raw_log")
@@ -103,7 +106,7 @@ class LLMResponse(VerticalGroup):
         await _stream_from_llm_api(self, client, MODEL_NAME, chat_log, ALL_TOOLS, DEBUG, _set_mode)
 
 
-class UserPrompt(VerticalGroup):
+class UserPrompt(HorizontalGroup):
 
     BORDER_TITLE = "User Prompt"
 
@@ -112,7 +115,7 @@ class UserPrompt(VerticalGroup):
         super().__init__()
 
     def compose(self) -> ComposeResult:
-        yield Markdown(markdown="❯ " + self.prompt, classes="user_prompt")
+        yield Markdown(markdown="❯ " + self.prompt, id="user_prompt")
 
 
 class MemoryDisplay(HorizontalGroup):
@@ -156,22 +159,31 @@ class LLMInput(HorizontalGroup):
         yield Input(placeholder="Enter Sari prompt here...", compact=True, id="input_text")
 
 
+class WelcomeHeader(VerticalGroup):
+
+    BORDER_TITLE = "Sari Agent"
+
+    def compose(self) -> ComposeResult:
+        yield Markdown(markdown=WELCOME_TEXT, id="welcome_header")
+
 class SariApp(App):
 
     TITLE = "Sari Term"
     CSS_PATH = "sari_tui.tcss"
 
     def compose(self) -> ComposeResult:
-        yield Header()
+        # yield Header()
         yield VerticalScroll(id="user_llm_screen")
+        with HorizontalGroup():
+            yield MemoryDisplay()
+            yield ModeDisplay()
         yield LLMInput()
-        yield MemoryDisplay()
-        yield ModeDisplay()
 
     def on_mount(self) -> None:
         self.sub_title = ""
         self.register_theme(SARI_THEME)
         self.theme = "sari"
+        self.query_one(VerticalScroll).mount(WelcomeHeader())
 
 
 if __name__ == "__main__":
