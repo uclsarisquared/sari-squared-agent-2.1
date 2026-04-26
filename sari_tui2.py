@@ -1,22 +1,23 @@
 from textual import work, on
 from openai import AsyncOpenAI, APIConnectionError
 from textual.app import App, ComposeResult
+from textual.suggester import SuggestFromList
 from textual.containers import VerticalGroup, VerticalScroll, HorizontalGroup
-from textual.widgets import Markdown, LoadingIndicator, TextArea, Header, \
-    RichLog, Collapsible, Label, Input, Static
+from textual.widgets import Markdown, LoadingIndicator,  \
+    RichLog, Collapsible, Label, Input, Static, TabbedContent, TabPane
 from agent_tools3 import (NAVIGATION_TOOLS, MANIPULATION_TOOLS, PERCEPTION_TOOLS,
                            MEMORY_TOOLS, SWITCH_MODE_TOOL, load_semantic_memory)
 from utils.utils import SARI_THEME
 from utils.llm_streaming import stream_from_llm_api as _stream_from_llm_api
 import os
-from utils.tui_widgets import WELCOME_TEXT
+from utils.tui_widgets import WELCOME_TEXT, COMMAND_LIST
 
 # Configuration
 DEBUG = False
 MODEL_NAME = "qwen/qwen3.5-27b"
 
-# ALL_TOOLS = NAVIGATION_TOOLS + MANIPULATION_TOOLS + PERCEPTION_TOOLS + MEMORY_TOOLS + [SWITCH_MODE_TOOL]
-ALL_TOOLS = []
+ALL_TOOLS = NAVIGATION_TOOLS + MANIPULATION_TOOLS + PERCEPTION_TOOLS + MEMORY_TOOLS + [SWITCH_MODE_TOOL]
+# ALL_TOOLS = []
 
 current_mode = "navigation"
 
@@ -156,12 +157,17 @@ class LLMInput(HorizontalGroup):
 
     def compose(self) -> ComposeResult:
         yield Static(content="❯",id="input_arrow")
-        yield Input(placeholder="Enter Sari prompt here...", compact=True, id="input_text")
+        yield Input(
+            placeholder="Enter Sari prompt here...",
+            suggester=SuggestFromList(COMMAND_LIST),
+            compact=True,
+            id="input_text"
+        )
 
 
 class WelcomeHeader(VerticalGroup):
 
-    BORDER_TITLE = "Sari Agent"
+    BORDER_TITLE = "Sari Term v1.0"
 
     def compose(self) -> ComposeResult:
         yield Markdown(markdown=WELCOME_TEXT, id="welcome_header")
@@ -173,11 +179,13 @@ class SariApp(App):
 
     def compose(self) -> ComposeResult:
         # yield Header()
-        yield VerticalScroll(id="user_llm_screen")
-        with HorizontalGroup():
-            yield MemoryDisplay()
-            yield ModeDisplay()
-        yield LLMInput()
+        with TabbedContent():
+            with TabPane("Main Agent"):
+                yield VerticalScroll(id="user_llm_screen")
+                with HorizontalGroup():
+                    yield MemoryDisplay()
+                    yield ModeDisplay()
+                yield LLMInput()
 
     def on_mount(self) -> None:
         self.sub_title = ""

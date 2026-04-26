@@ -70,6 +70,8 @@ async def stream_from_llm_api(widget, client, model_name, chat_log, all_tools, d
                 tool_call_string += event.delta
 
             case "response.function_call_arguments.done":
+                # When this is called, the tool call delta's have finished
+                # accumulating and we will have a full tool call JSON to parse
                 args = json.loads(tool_call_string)
                 tool_call_display.append_func_args(tool_call_string)
                 tool_call_string = ""

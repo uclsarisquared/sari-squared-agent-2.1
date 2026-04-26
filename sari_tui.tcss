@@ -90,7 +90,7 @@ LLMInput {
 }
 
 WelcomeHeader {
-    height: 8;
+    height: 12;
     align: center top;
     border: round $primary;
     padding: 0;
