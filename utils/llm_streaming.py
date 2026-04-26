@@ -1,5 +1,5 @@
 import json
-from textual.containers import VerticalGroup
+from textual.containers import VerticalGroup, VerticalScroll
 from agent_tools3 import dispatch_tool, TOOL_MODE_MAP
 from textual.widgets import LoadingIndicator, RichLog, Markdown, Label
 from utils.agent_utils import build_system_instruction, append_to_chat_log, synthesize_episodic_memory
@@ -42,37 +42,47 @@ async def stream_from_llm_api(widget: VerticalGroup, client, model_name, chat_lo
             widget.query_one(RichLog).write(event.type)
 
         match event.type:
+            # LLM response text delta (streaming)
             case "response.output_text.delta":
                 await widget.query_one(Markdown).append(str(event.delta))
 
+            # LLM begins reasoning, enable the reasoning summary display
             case "response.reasoning_summary_part.added":
                 widget.query_one(LLMThinkingSummary).display = True
 
+            # LLM is reasoning, update display with text delta
             case "response.reasoning_summary_text.delta" | "response.reasoning_text.delta":
                 widget.query_one(LLMThinkingSummary).update_thinking_text(event.delta)
 
+            # LLM is finished saying something (not reasoning), update chat logs
             case "response.output_item.done":
                 if event.item.type == "message" and event.item.content:
                     append_to_chat_log(chat_log, "assistant", event.item.content[0].text)
 
+            # LLM has finished reasoning, close the thinking summary dropdown
             case "response.reasoning_summary_part.done" | "response.reasoning_text.done":
                 widget.query_one(LLMThinkingSummary).done_thinking()
 
+            # LLM calls a tool, mount a tool call display
             case "response.output_item.added":
                 if event.item.type == "function_call":
                     tool_call_id = event.item.call_id
                     tool_call_name = event.item.name
                     tool_call_display = LLMToolCallDisplay(event.item.name)
-                    await widget.mount(tool_call_display)
+                    await widget.parent.query_one(VerticalScroll).mount(tool_call_display)
                 if event.item.type == "reasoning":
                     widget.query_one(LLMThinkingSummary).display = True
 
+            # LLM is calling a tool, accumulate the tool call arguments
             case "response.function_call_arguments.delta":
                 tool_call_string += event.delta
 
+            # LLM is finished doing anything, update token/price usage
+            # TODO: Will crash with local models, fix
             case "response.completed":
                 widget.query_one(Label).content = f"↑ {event.response.usage.input_tokens} Tok | ↓ {event.response.usage.output_tokens} Tok | ${event.response.usage.cost}"
 
+            # LLM is done sending function arguments, parse it
             case "response.function_call_arguments.done":
                 # When this is called, the tool call delta's have finished
                 # accumulating and we will have a full tool call JSON to parse
@@ -93,6 +103,8 @@ async def stream_from_llm_api(widget: VerticalGroup, client, model_name, chat_lo
                         result = await dispatch_tool(tool_call_display.tool_name, args)
                     except Exception as e:
                         result = {"error": str(e)}
+
+                # Make tool call display stop the loading animation
                 tool_call_display.tool_done()
 
                 chat_log.append({
