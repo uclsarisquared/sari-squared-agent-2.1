@@ -1,10 +1,11 @@
 import json
+from textual.containers import VerticalGroup
 from agent_tools3 import dispatch_tool, TOOL_MODE_MAP
-from textual.widgets import LoadingIndicator, RichLog, Markdown
+from textual.widgets import LoadingIndicator, RichLog, Markdown, Label
 from utils.agent_utils import build_system_instruction, append_to_chat_log, synthesize_episodic_memory
 
 
-async def stream_from_llm_api(widget, client, model_name, chat_log, all_tools, debug, mode_setter):
+async def stream_from_llm_api(widget: VerticalGroup, client, model_name, chat_log, all_tools, debug, mode_setter):
     # Lazy import avoids a circular dependency: sari_tui2 → llm_streaming → sari_tui2.
     # By call time all modules are fully loaded so this is safe.
     from sari_tui2 import LLMThinkingSummary, LLMToolCallDisplay, ModeDisplay, LLMResponse
@@ -68,6 +69,9 @@ async def stream_from_llm_api(widget, client, model_name, chat_log, all_tools, d
 
             case "response.function_call_arguments.delta":
                 tool_call_string += event.delta
+
+            case "response.completed":
+                widget.query_one(Label).content = f"↑ {event.response.usage.input_tokens} Tok | ↓ {event.response.usage.output_tokens} Tok | ${event.response.usage.cost}"
 
             case "response.function_call_arguments.done":
                 # When this is called, the tool call delta's have finished

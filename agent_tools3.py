@@ -87,8 +87,8 @@ async def _repeat_transform_hands(l_trans, l_rot, r_trans, r_rot, units: int) ->
 # Memory file helpers (used by sari_tui2.py as well)
 # ---------------------------------------------------------------------------
 
-SEMANTIC_MEMORY_FILE = "semantic_memory.json"
-EPISODIC_MEMORY_FILE = "episodic_memory.json"
+SEMANTIC_MEMORY_FILE = "memory/semantic_memory.json"
+EPISODIC_MEMORY_FILE = "memory/episodic_memory.json"
 
 
 def load_semantic_memory() -> list[str]:

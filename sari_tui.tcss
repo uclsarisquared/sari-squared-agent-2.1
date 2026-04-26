@@ -89,6 +89,11 @@ LLMInput {
     height: 3;
 }
 
+#token_usage_label {
+    text-align: right;
+    margin-bottom: 1;
+}
+
 WelcomeHeader {
     height: 12;
     align: center top;

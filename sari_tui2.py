@@ -15,6 +15,7 @@ from utils.tui_widgets import WELCOME_TEXT, COMMAND_LIST
 # Configuration
 DEBUG = False
 MODEL_NAME = "qwen/qwen3.5-27b"
+# MODEL_NAME = "deepseek/deepseek-v4-flash"
 
 ALL_TOOLS = NAVIGATION_TOOLS + MANIPULATION_TOOLS + PERCEPTION_TOOLS + MEMORY_TOOLS + [SWITCH_MODE_TOOL]
 # ALL_TOOLS = []
@@ -88,7 +89,9 @@ class LLMResponse(VerticalGroup):
 
         with HorizontalGroup():
             yield Static("⏺", id="llm_resp_bullet")
-            yield Markdown(id="llm_response_text")
+            with VerticalGroup():
+                yield Markdown(id="llm_response_text")
+                yield Label("↑ ... Tok | ↓ ... Tok", id="token_usage_label")
 
         if DEBUG:
             yield RichLog(highlight=True, id="raw_log")
@@ -158,7 +161,7 @@ class LLMInput(HorizontalGroup):
     def compose(self) -> ComposeResult:
         yield Static(content="❯",id="input_arrow")
         yield Input(
-            placeholder="Enter Sari prompt here...",
+            placeholder=f"Send prompt to {MODEL_NAME}...",
             suggester=SuggestFromList(COMMAND_LIST),
             compact=True,
             id="input_text"
