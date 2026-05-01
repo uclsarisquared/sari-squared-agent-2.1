@@ -89,8 +89,8 @@ class MemoryDisplay(HorizontalGroup):
 class ModeDisplay(HorizontalGroup):
 
     def compose(self) -> ComposeResult:
-        import sari_tui2
-        yield Label(f"Agent mode: {sari_tui2.current_mode}", id="mode_display")
+        import sari_tui
+        yield Label(f"Agent mode: {sari_tui.current_mode}", id="mode_display")
 
     def update_mode(self, mode: str) -> None:
         self.query_one("#mode_display", Label).update(f"Agent mode: {mode}")
@@ -101,7 +101,7 @@ class LLMInput(HorizontalGroup):
 
     @on(Input.Submitted)
     def on_button_pressed(self) -> None:
-        import sari_tui2
+        import sari_tui
         user_input = self.query_one(Input).value
 
         if not user_input:
@@ -110,13 +110,13 @@ class LLMInput(HorizontalGroup):
         self.parent.query_one(VerticalScroll).mount(UserPrompt(user_input))
         self.parent.sub_title = user_input
         self.query_one(Input).value = ""
-        self.parent.query_one(VerticalScroll).mount(sari_tui2.LLMResponse(user_input, sari_tui2.current_mode))
+        self.parent.query_one(VerticalScroll).mount(sari_tui.LLMResponse(user_input, sari_tui.current_mode))
 
     def compose(self) -> ComposeResult:
-        import sari_tui2
+        import sari_tui
         yield Static(content="❯", id="input_arrow")
         yield Input(
-            placeholder=f"Send prompt to {sari_tui2.MODEL_NAME}...",
+            placeholder=f"Send prompt to {sari_tui.MODEL_NAME}...",
             suggester=SuggestFromList(COMMAND_LIST),
             compact=True,
             id="input_text"

@@ -7,7 +7,7 @@ from utils.agent_utils import build_system_instruction, append_to_chat_log, synt
 async def stream_from_llm_api(widget: VerticalGroup, client, model_name, chat_log, all_tools, debug, mode_setter):
     # Lazy import avoids a circular dependency: sari_tui2 → llm_streaming → sari_tui2.
     # By call time all modules are fully loaded so this is safe.
-    from sari_tui2 import LLMThinkingSummary, LLMToolCallDisplay, ModeDisplay, LLMResponse
+    from sari_tui import LLMThinkingSummary, LLMToolCallDisplay, ModeDisplay, LLMResponse
 
     tool_call_string = ""
     tool_call_id = None

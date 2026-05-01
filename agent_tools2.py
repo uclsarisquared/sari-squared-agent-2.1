@@ -567,7 +567,7 @@ SWITCH_MODE_TOOL = {
     },
 }
 
-# Combined list kept for convenience; sari_tui.py uses the per-category lists directly.
+# Combined list kept for convenience; sari_tui_old.py uses the per-category lists directly.
 AGENT_TOOLS = NAVIGATION_TOOLS + MANIPULATION_TOOLS + PERCEPTION_TOOLS
 
 

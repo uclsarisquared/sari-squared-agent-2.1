@@ -2,7 +2,7 @@
 agent_tools3.py — agent_tools2.py extended with semantic and episodic memory tools.
 
 Adds MEMORY_TOOLS (store_semantic_memory, recall_semantic_memory, clear_semantic_memory)
-backed by local JSON files, plus helper functions used by sari_tui2.py for episodic
+backed by local JSON files, plus helper functions used by sari_tui.py for episodic
 memory persistence.
 """
 
@@ -84,7 +84,7 @@ async def _repeat_transform_hands(l_trans, l_rot, r_trans, r_rot, units: int) ->
 
 
 # ---------------------------------------------------------------------------
-# Memory file helpers (used by sari_tui2.py as well)
+# Memory file helpers (used by sari_tui.py as well)
 # ---------------------------------------------------------------------------
 
 SEMANTIC_MEMORY_FILE = "memory/semantic_memory.json"
