@@ -4,7 +4,6 @@ from agent_tools3 import dispatch_tool, TOOL_MODE_MAP
 from textual.widgets import LoadingIndicator, RichLog, Markdown, Label
 from utils.agent_utils import build_system_instruction, append_to_chat_log, synthesize_episodic_memory
 
-
 async def stream_from_llm_api(widget: VerticalGroup, client, model_name, chat_log, all_tools, debug, mode_setter):
     # Lazy import avoids a circular dependency: sari_tui2 → llm_streaming → sari_tui2.
     # By call time all modules are fully loaded so this is safe.
@@ -16,6 +15,7 @@ async def stream_from_llm_api(widget: VerticalGroup, client, model_name, chat_lo
     tool_call_display = None
     spawned_continuation = False
 
+    # TODO: Fix type checking here, make widget type hint LLMResponse
     if widget.prompt is not None:
         append_to_chat_log(chat_log, "user", widget.prompt)
 
@@ -115,11 +115,14 @@ async def stream_from_llm_api(widget: VerticalGroup, client, model_name, chat_lo
                 })
 
                 if isinstance(result, dict) and "image_base64" in result:
+                    # Since tools that directly return a base64 image cannot be
+                    # read, append a "user" role to the chat log with the image
                     chat_log.append({
                         "type": "function_call_output",
                         "call_id": tool_call_id,
                         "output": "Screenshot captured.",
                     })
+
                     chat_log.append({
                         "role": "user",
                         "content": [{
