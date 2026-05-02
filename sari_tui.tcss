@@ -12,11 +12,15 @@ LLMInput {
 }
 
 UserPrompt {
-    border: round $secondary;
-    border-title-align: right;
+    background: #1f1f1f;
     align-vertical: middle;
+    padding-top: 1;
+    color: white;
     align-horizontal: right;
-    margin-left: 10;
+}
+
+#user_prompt {
+    color: white;
 }
 
 LLMToolCallDisplay {
@@ -50,8 +54,59 @@ LLMThinkingSummary {
 }
 
 LLMResponse {
+    align-horizontal: right;
+}
+
+#llm_resp_bullet {
+    width: 2;
+    color: white;
+}
+
+#llm_response_text {
+    padding: 0;
+    color: white;
+}
+
+#input_arrow {
+    color: white;
+    align: left top;
+    width: 2;
+    padding: 0;
+}
+
+#input_text {
+    height: 2;
+    background: $background;
+    padding: 0;
+    color: white;
+    width: 90%;
+    align: right middle;
+}
+
+LLMInput {
+    border: hkey $foreground;
+    padding: 0;
+    height: 3;
+}
+
+#token_usage_label {
+    text-align: right;
+    margin-bottom: 1;
+    opacity: 50%;
+}
+
+WelcomeHeader {
+    height: 12;
+    align: center top;
     border: round $primary;
-    align-vertical: middle;
+    padding: 0;
+    margin: 0;
+}
+
+#welcome_header {
+    padding: 0 1 1 1;
+    offset-y: -1;
+    text-align: center;
 }
 
 .tool_success {

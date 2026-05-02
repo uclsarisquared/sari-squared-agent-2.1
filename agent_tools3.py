@@ -1,33 +1,32 @@
 """
-agent_tools2.py — Claude API tool definitions mirroring old_agent_server.py.
+agent_tools3.py — agent_tools2.py extended with semantic and episodic memory tools.
 
-Defines AGENT_TOOLS (list of function schemas for the Claude API) and
-handle_agent_tool_call() which executes each tool by talking to the Sari
-Sandbox WebSocket at ws://localhost:8080/commands.
+Adds MEMORY_TOOLS (store_semantic_memory, recall_semantic_memory, clear_semantic_memory)
+backed by local JSON files, plus helper functions used by sari_tui.py for episodic
+memory persistence.
 """
 
 import asyncio
 import base64
 import io
 import json
+import os
 import re
 
 import websockets
 from PIL import Image
 
 # ---------------------------------------------------------------------------
-# WebSocket helpers (mirrors old_agent_server.py)
+# WebSocket helpers
 # ---------------------------------------------------------------------------
 
 WS_URI = "ws://localhost:8080/commands"
 UNIT_CAP = 10
 
-# Grip state tracking — prevents the agent from double-toggling
 _left_gripped: bool = False
 _right_gripped: bool = False
 
-
-SCREENSHOT_TIMEOUT = 15  # seconds; screenshots can be slow to render
+SCREENSHOT_TIMEOUT = 15
 
 
 async def _send(command: dict, timeout: float | None = 10.0) -> bytes | str:
@@ -82,6 +81,38 @@ async def _repeat_transform_hands(l_trans, l_rot, r_trans, r_rot, units: int) ->
         })
         state = _parse_hand_state(raw)
     return state
+
+
+# ---------------------------------------------------------------------------
+# Memory file helpers (used by sari_tui.py as well)
+# ---------------------------------------------------------------------------
+
+SEMANTIC_MEMORY_FILE = "memory/semantic_memory.json"
+EPISODIC_MEMORY_FILE = "memory/episodic_memory.json"
+
+
+def load_semantic_memory() -> list[str]:
+    if os.path.exists(SEMANTIC_MEMORY_FILE):
+        with open(SEMANTIC_MEMORY_FILE) as f:
+            return json.load(f)
+    return []
+
+
+def _save_semantic_memory(facts: list[str]) -> None:
+    with open(SEMANTIC_MEMORY_FILE, "w") as f:
+        json.dump(facts, f, indent=2)
+
+
+def load_episodic_memory() -> dict:
+    if os.path.exists(EPISODIC_MEMORY_FILE):
+        with open(EPISODIC_MEMORY_FILE) as f:
+            return json.load(f)
+    return {}
+
+
+def save_episodic_memory(entry: dict) -> None:
+    with open(EPISODIC_MEMORY_FILE, "w") as f:
+        json.dump(entry, f, indent=2)
 
 
 # ---------------------------------------------------------------------------
@@ -226,34 +257,6 @@ NAVIGATION_TOOLS = [
 ]
 
 MANIPULATION_TOOLS = [
-    # {
-    #     "type": "function",
-    #     "name": "extend_left_hand_forward",
-    #     "description": "Extend the left hand forward. Each unit moves the hand 0.025 metres forward. Maximum 10 units per call.",
-    #     "strict": True,
-    #     "parameters": {
-    #         "type": "object",
-    #         "properties": {
-    #             "units": {"type": "integer", "description": "Number of 0.025-metre steps (1–10)."},
-    #         },
-    #         "required": ["units"],
-    #         "additionalProperties": False,
-    #     },
-    # },
-    # {
-    #     "type": "function",
-    #     "name": "pull_left_hand_backward",
-    #     "description": "Retract the left hand backward. Each unit moves the hand 0.025 metres backward. Maximum 10 units per call.",
-    #     "strict": True,
-    #     "parameters": {
-    #         "type": "object",
-    #         "properties": {
-    #             "units": {"type": "integer", "description": "Number of 0.025-metre steps (1–10)."},
-    #         },
-    #         "required": ["units"],
-    #         "additionalProperties": False,
-    #     },
-    # },
     {
         "type": "function",
         "name": "extend_right_hand_forward",
@@ -282,34 +285,6 @@ MANIPULATION_TOOLS = [
             "additionalProperties": False,
         },
     },
-    # {
-    #     "type": "function",
-    #     "name": "raise_left_hand",
-    #     "description": "Raise the left hand upward. Each unit raises the hand 0.025 metres. Maximum 10 units per call.",
-    #     "strict": True,
-    #     "parameters": {
-    #         "type": "object",
-    #         "properties": {
-    #             "units": {"type": "integer", "description": "Number of 0.025-metre steps (1–10)."},
-    #         },
-    #         "required": ["units"],
-    #         "additionalProperties": False,
-    #     },
-    # },
-    # {
-    #     "type": "function",
-    #     "name": "lower_left_hand",
-    #     "description": "Lower the left hand downward. Each unit lowers the hand 0.025 metres. Maximum 10 units per call.",
-    #     "strict": True,
-    #     "parameters": {
-    #         "type": "object",
-    #         "properties": {
-    #             "units": {"type": "integer", "description": "Number of 0.025-metre steps (1–10)."},
-    #         },
-    #         "required": ["units"],
-    #         "additionalProperties": False,
-    #     },
-    # },
     {
         "type": "function",
         "name": "raise_right_hand",
@@ -338,34 +313,6 @@ MANIPULATION_TOOLS = [
             "additionalProperties": False,
         },
     },
-    # {
-    #     "type": "function",
-    #     "name": "rotate_left_hand_clockwise",
-    #     "description": "Rotate the left hand clockwise. Each unit rotates 15 degrees.",
-    #     "strict": True,
-    #     "parameters": {
-    #         "type": "object",
-    #         "properties": {
-    #             "units": {"type": "integer", "description": "Number of 15-degree steps."},
-    #         },
-    #         "required": ["units"],
-    #         "additionalProperties": False,
-    #     },
-    # },
-    # {
-    #     "type": "function",
-    #     "name": "rotate_left_hand_counterclockwise",
-    #     "description": "Rotate the left hand counterclockwise. Each unit rotates 15 degrees.",
-    #     "strict": True,
-    #     "parameters": {
-    #         "type": "object",
-    #         "properties": {
-    #             "units": {"type": "integer", "description": "Number of 15-degree steps."},
-    #         },
-    #         "required": ["units"],
-    #         "additionalProperties": False,
-    #     },
-    # },
     {
         "type": "function",
         "name": "rotate_right_hand_clockwise",
@@ -394,30 +341,6 @@ MANIPULATION_TOOLS = [
             "additionalProperties": False,
         },
     },
-    # {
-    #     "type": "function",
-    #     "name": "grip_left",
-    #     "description": "Close the left hand grip to grab an object. No-op if the grip is already closed.",
-    #     "strict": True,
-    #     "parameters": {
-    #         "type": "object",
-    #         "properties": {},
-    #         "required": [],
-    #         "additionalProperties": False,
-    #     },
-    # },
-    # {
-    #     "type": "function",
-    #     "name": "release_left",
-    #     "description": "Open the left hand grip to release an object. No-op if the grip is already open.",
-    #     "strict": True,
-    #     "parameters": {
-    #         "type": "object",
-    #         "properties": {},
-    #         "required": [],
-    #         "additionalProperties": False,
-    #     },
-    # },
     {
         "type": "function",
         "name": "grip_right",
@@ -486,18 +409,18 @@ PERCEPTION_TOOLS = [
             "additionalProperties": False,
         },
     },
-    # {
-    #     "type": "function",
-    #     "name": "get_scene_json",
-    #     "description": "Request the scene's structured JSON state from the sandbox.",
-    #     "strict": True,
-    #     "parameters": {
-    #         "type": "object",
-    #         "properties": {},
-    #         "required": [],
-    #         "additionalProperties": False,
-    #     },
-    # },
+    {
+        "type": "function",
+        "name": "get_scene_json",
+        "description": "Request the scene's structured JSON state from the sandbox.",
+        "strict": True,
+        "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": False,
+        },
+    },
     {
         "type": "function",
         "name": "get_agent_state",
@@ -536,10 +459,56 @@ PERCEPTION_TOOLS = [
     },
 ]
 
+MEMORY_TOOLS = [
+    {
+        "type": "function",
+        "name": "store_semantic_memory",
+        "description": (
+            "Persist a factual observation or learned rule to long-term semantic memory. "
+            "Use this when you discover something that will be useful across future interactions — "
+            "e.g. object locations, environment layout, what actions succeed or fail."
+        ),
+        "strict": True,
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "fact": {"type": "string", "description": "The fact or observation to store."},
+            },
+            "required": ["fact"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "type": "function",
+        "name": "recall_semantic_memory",
+        "description": "Retrieve all facts currently stored in semantic memory.",
+        "strict": True,
+        "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "type": "function",
+        "name": "clear_semantic_memory",
+        "description": "Erase all stored semantic memory. Use only when starting a completely new, unrelated task.",
+        "strict": True,
+        "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": False,
+        },
+    },
+]
+
 TOOL_MODE_MAP: dict[str, str] = (
     {tool["name"]: "navigation"   for tool in NAVIGATION_TOOLS}
     | {tool["name"]: "manipulation" for tool in MANIPULATION_TOOLS}
     | {tool["name"]: "perception"   for tool in PERCEPTION_TOOLS}
+    # MEMORY_TOOLS intentionally omitted — always available regardless of mode
 )
 
 SWITCH_MODE_TOOL = {
@@ -567,8 +536,7 @@ SWITCH_MODE_TOOL = {
     },
 }
 
-# Combined list kept for convenience; sari_tui_old.py uses the per-category lists directly.
-AGENT_TOOLS = NAVIGATION_TOOLS + MANIPULATION_TOOLS + PERCEPTION_TOOLS
+AGENT_TOOLS = NAVIGATION_TOOLS + MANIPULATION_TOOLS + PERCEPTION_TOOLS + MEMORY_TOOLS
 
 
 # ---------------------------------------------------------------------------
@@ -628,7 +596,7 @@ async def _dispatch(name: str, args: dict):
     if name == "rotate_right_hand_counterclockwise":
         return await _repeat_transform_hands((0, 0, 0), (0, 0, 0), (0, 0, 0), (0, -15, 0), int(args["units"]))
 
-    # Grips — idempotent: only send the toggle if state needs to change
+    # Grips
     if name == "grip_left":
         if not _left_gripped:
             await _send({"command": "ToggleLeftGrip"})
@@ -703,6 +671,19 @@ async def _dispatch(name: str, args: dict):
     if name == "reset_environment":
         await _send({"command": "ResetEnvironment"})
         return {"success": True}
+
+    # Memory
+    if name == "store_semantic_memory":
+        facts = load_semantic_memory()
+        facts.append(args["fact"])
+        _save_semantic_memory(facts)
+        return {"stored": True, "total_facts": len(facts)}
+    if name == "recall_semantic_memory":
+        facts = load_semantic_memory()
+        return {"facts": facts, "total_facts": len(facts)}
+    if name == "clear_semantic_memory":
+        _save_semantic_memory([])
+        return {"cleared": True}
 
     raise ValueError(f"Unknown tool: {name}")
 
