@@ -9,7 +9,7 @@ async def stream_from_llm_api(widget: VerticalGroup, client, model_name, chat_lo
     # By call time all modules are fully loaded so this is safe.
     from sari_tui import LLMThinkingSummary, LLMToolCallDisplay, ModeDisplay, LLMResponse
 
-    tool_call_string = ""
+    tool_call_deltas = ""
     tool_call_id = None
     tool_call_name = None
     tool_call_display = None
@@ -75,20 +75,22 @@ async def stream_from_llm_api(widget: VerticalGroup, client, model_name, chat_lo
 
             # LLM is calling a tool, accumulate the tool call arguments
             case "response.function_call_arguments.delta":
-                tool_call_string += event.delta
+                tool_call_deltas += event.delta
 
             # LLM is finished doing anything, update token/price usage
-            # TODO: Will crash with local models, fix
+            # TODO: Will possibly crash with local models, fix
             case "response.completed":
                 widget.query_one(Label).content = f"↑ {event.response.usage.input_tokens} Tok | ↓ {event.response.usage.output_tokens} Tok | ${event.response.usage.cost}"
 
             # LLM is done sending function arguments, parse it
             case "response.function_call_arguments.done":
-                # When this is called, the tool call delta's have finished
-                # accumulating and we will have a full tool call JSON to parse
-                args = json.loads(tool_call_string)
-                tool_call_display.append_func_args(tool_call_string)
-                tool_call_string = ""
+                # When this is called, the tool call argument deltas have finished
+                # accumulating, and we will have a full JSON to parse
+                # Sample response: {"units": 5}
+                args = json.loads(tool_call_deltas)
+                tool_call_display.update_func_args(tool_call_deltas)
+                # Reset tool_call_deltas
+                tool_call_deltas = ""
 
                 if tool_call_display.tool_name == "switch_mode":
                     new_mode = args["mode"]

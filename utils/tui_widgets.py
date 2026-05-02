@@ -50,7 +50,7 @@ class LLMToolCallDisplay(VerticalGroup):
     def on_mount(self):
         self.border_title = self.tool_name
 
-    def append_func_args(self, args: str) -> None:
+    def update_func_args(self, args: str) -> None:
         self.border_title += args
 
     def compose(self) -> ComposeResult:
