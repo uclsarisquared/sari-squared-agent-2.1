@@ -1,7 +1,6 @@
 from textual import work
 from openai import AsyncOpenAI, APIConnectionError
 from textual.app import App, ComposeResult
-from textual.reactive import reactive
 from textual.containers import VerticalGroup, VerticalScroll, HorizontalGroup
 from textual.widgets import Markdown, LoadingIndicator, RichLog, Label, Static, TabbedContent, TabPane
 from agent_tools3 import (NAVIGATION_TOOLS, MANIPULATION_TOOLS, PERCEPTION_TOOLS,
@@ -35,16 +34,12 @@ class LLMResponse(VerticalGroup):
 
     BORDER_TITLE = MODEL_NAME
 
-    def __init__(self, ctx: AgentContext, prompt: str | None) -> None:
+    def __init__(self, prompt: str | None, ctx: AgentContext) -> None:
         self.ctx = ctx
         self.prompt = prompt
         super().__init__()
 
     def compose(self) -> ComposeResult:
-        tokens_down = self.ctx.metadata['latest_prompt_tokens_down']
-        tokens_up = self.ctx.metadata['latest_prompt_tokens_up']
-        tokens_cost = self.ctx.metadata['latest_prompt_tokens_cost']
-
         yield LoadingIndicator()
 
         llm_thinking = LLMThinkingSummary()
@@ -55,7 +50,10 @@ class LLMResponse(VerticalGroup):
             yield Static("⏺", id="llm_resp_bullet")
             with VerticalGroup():
                 yield Markdown(id="llm_response_text")
-                yield Label(f"↑ {tokens_down} Tok | ↓ {tokens_up} Tok | ${tokens_cost}", id="token_usage_label")
+                yield Label(
+                    "↑ ... Tok | ↓ ... Tok | $...",
+                    id="token_usage_label"
+                )
 
         if DEBUG:
             yield RichLog(highlight=True, id="raw_log")
@@ -75,19 +73,16 @@ class SariApp(App):
     TITLE = "Sari Term"
     CSS_PATH = "sari_tui.tcss"
 
-
-    ctx = reactive(AgentContext(
+    ctx = AgentContext(
         messages=[],
         system_prompt="",
         tools=ALL_TOOLS,
-        model=MODEL_NAME,
+        model_name=MODEL_NAME,
         metadata={
             "current_mode": "navigation",
-            'latest_prompt_tokens_down': "...",
-            'latest_prompt_tokens_up': "...",
-            'latest_prompt_tokens_cost': "..."
-        }
-    ))
+        },
+        thinking_effort="low"
+    )
 
     def compose(self) -> ComposeResult:
         # yield Header()
@@ -103,7 +98,6 @@ class SariApp(App):
         self.sub_title = ""
         self.register_theme(SARI_THEME)
         self.theme = "sari"
-        self.ctx.tui_app = self
         self.query_one(VerticalScroll).mount(WelcomeHeader())
 
 

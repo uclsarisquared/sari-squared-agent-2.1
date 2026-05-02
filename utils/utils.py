@@ -13,25 +13,36 @@ def encode_image(image_path: str) -> str:
 
 @dataclass
 class AgentContext:
-    messages: list[dict]
+    """Dataclass that holds all useful information about the current state."""
+
+    # LLM-RELATED CONFIG
+    model_name: str
+    thinking_effort: str
     system_prompt: str
     tools: list[dict]
-    model: str
-    thinking_effort: str
+
+    messages: list[dict]
     debug_logs: str = ""
+    active_tool_calls: list = field(default_factory=list)
     debug_mode: bool = False
-    tui_app: App = None
-    metadata: dict = field(default_factory=dict) # arbitrary plugin state goes here
+
+    metadata: dict = field(default_factory=dict)
+    token_metrics: dict = field(default_factory=lambda: {
+        'latest_up': 0,
+        'latest_down': 0,
+        'latest_cost': 0,
+    })
 
     def append_message(self, role: str, message) -> None:
         self.append_raw({"role": role, "content": message})
 
     def append_raw(self, msg_dict: dict) -> None:
-        from sari_tui import SariApp
-
         self.messages.append(msg_dict)
-        # Ignore the type hint warning, it works
-        self.tui_app.mutate_reactive(SariApp.ctx)
+
+    def update_token_metrics(self, up, down, cost) -> None:
+        self.token_metrics["latest_up"] = up
+        self.token_metrics["latest_down"] = down
+        self.token_metrics["latest_cost"] = cost
 
 
 class AgentPlugin(ABC):

@@ -51,7 +51,7 @@ class LLMToolCallDisplay(VerticalGroup):
     def on_mount(self):
         self.border_title = self.tool_name
 
-    def update_func_args(self, args: str) -> None:
+    def update_display_header(self, args: str) -> None:
         self.border_title += args
 
     def compose(self) -> ComposeResult:
@@ -125,13 +125,15 @@ class LLMInput(HorizontalGroup):
         self.parent.sub_title = user_input
         self.query_one(Input).value = ""
         self.parent.query_one(VerticalScroll).mount(
-            sari_tui.LLMResponse(self.ctx, user_input)
+            sari_tui.LLMResponse(
+                user_input, self.ctx
+            )
         )
 
     def compose(self) -> ComposeResult:
         yield Static(content="❯", id="input_arrow")
         yield Input(
-            placeholder=f"Send prompt to {self.ctx.model}...",
+            placeholder=f"Send prompt to {self.ctx.model_name}...",
             suggester=SuggestFromList(COMMAND_LIST),
             compact=True,
             id="input_text"

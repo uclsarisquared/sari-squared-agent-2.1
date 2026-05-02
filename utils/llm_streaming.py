@@ -4,7 +4,15 @@ from agent_tools3 import dispatch_tool, TOOL_MODE_MAP
 from textual.widgets import LoadingIndicator, RichLog, Markdown, Label
 from utils.agent_utils import build_system_instruction, append_to_chat_log, synthesize_episodic_memory
 from utils.utils import AgentContext
+from dataclasses import dataclass
+from tui_widgets import LLMToolCallDisplay
 
+@dataclass
+class ToolCallContext:
+    id: str = None
+    name: str = None
+    deltas: str = ""
+    display: LLMToolCallDisplay = None
 
 # model_name, chat_log, all_tools, debug, mode_setter
 async def stream_from_llm_api(widget: VerticalGroup, client, ctx: AgentContext):
@@ -12,24 +20,21 @@ async def stream_from_llm_api(widget: VerticalGroup, client, ctx: AgentContext):
     # By call time all modules are fully loaded so this is safe.
     from sari_tui import LLMThinkingSummary, LLMToolCallDisplay, ModeDisplay, LLMResponse
 
-    tool_call_deltas = ""
-    tool_call_id = None
-    tool_call_name = None
-    tool_call_display = None
+    tool_ctx = ToolCallContext()
     spawned_continuation = False
 
-    # TODO: Fix type checking here, make widget type hint LLMResponse
+    # Ignore type check, this works
     if widget.prompt is not None:
         ctx.append_message("user", widget.prompt)
 
     # noinspection PyTypeChecker
     stream = await client.responses.create(
-        model=ctx.model,
+        model=ctx.model_name,
         instructions=build_system_instruction(),
         input=ctx.messages,
         max_output_tokens=65536,
         reasoning={
-            "effort": "low",
+            "effort": ctx.thinking_effort,
             "summary": "auto"
         },
         tools=ctx.tools,
@@ -69,53 +74,60 @@ async def stream_from_llm_api(widget: VerticalGroup, client, ctx: AgentContext):
             # LLM calls a tool, mount a tool call display
             case "response.output_item.added":
                 if event.item.type == "function_call":
-                    tool_call_id = event.item.call_id
-                    tool_call_name = event.item.name
-                    tool_call_display = LLMToolCallDisplay(event.item.name)
-                    await widget.parent.query_one(VerticalScroll).mount(tool_call_display)
+                    tool_ctx.id = event.item.call_id
+                    tool_ctx.name = event.item.name
+                    tool_ctx.display = LLMToolCallDisplay(event.item.name)
+                    await widget.parent.query_one(VerticalScroll).mount(tool_ctx.display)
                 if event.item.type == "reasoning":
                     widget.query_one(LLMThinkingSummary).display = True
 
             # LLM is calling a tool, accumulate the tool call arguments
             case "response.function_call_arguments.delta":
-                tool_call_deltas += event.delta
+                tool_ctx.deltas += event.delta
 
             # LLM is finished doing anything, update token/price usage
-            # TODO: Will possibly crash with local models, fix
+            # TODO: usage.cost will possibly crash with local models, fix
             case "response.completed":
-                widget.query_one(Label).content = f"↑ {event.response.usage.input_tokens} Tok | ↓ {event.response.usage.output_tokens} Tok | ${event.response.usage.cost}"
+                usage = event.response.usage
+                widget.query_one(Label).content = f"↑ {usage.input_tokens} Tok | ↓ {usage.output_tokens} Tok | ${usage.cost}"
+                ctx.update_token_metrics(
+                    up=usage.input_tokens,
+                    down=usage.output_tokens,
+                    cost=usage.cost
+                )
 
             # LLM is done sending function arguments, parse it
             case "response.function_call_arguments.done":
                 # When this is called, the tool call argument deltas have finished
                 # accumulating, and we will have a full JSON to parse
                 # Sample response: {"units": 5}
-                args = json.loads(tool_call_deltas)
-                tool_call_display.update_func_args(tool_call_deltas)
+                args = json.loads(tool_ctx.deltas)
+                tool_ctx.display.update_display_header(tool_ctx.deltas)
+
                 # Reset tool_call_deltas
-                tool_call_deltas = ""
+                tool_ctx.deltas = ""
 
                 # TODO: implement dict to delegate handle_tool_call to plugin
-                if tool_call_display.tool_name == "switch_mode":
+                if tool_ctx.name == "switch_mode":
                     new_mode = args["mode"]
                     ctx.metadata['current_mode'] = new_mode
                     widget.mode = new_mode
                     result = {"switched_to": new_mode}
-                elif (required_mode := TOOL_MODE_MAP.get(tool_call_display.tool_name)) and required_mode != widget.mode:
-                    result = {"error": f"Mode mismatch: '{tool_call_display.tool_name}' requires '{required_mode}' mode. Call switch_mode(\"{required_mode}\") first."}
+                elif (required_mode := TOOL_MODE_MAP.get(tool_ctx.name)) and required_mode != widget.mode:
+                    result = {"error": f"Mode mismatch: '{tool_ctx.name}' requires '{required_mode}' mode. Call switch_mode(\"{required_mode}\") first."}
                 else:
                     try:
-                        result = await dispatch_tool(tool_call_display.tool_name, args)
+                        result = await dispatch_tool(tool_ctx.name, args)
                     except Exception as e:
                         result = {"error": str(e)}
 
                 # Make tool call display stop the loading animation
-                tool_call_display.tool_done()
+                tool_ctx.display.tool_done()
 
                 ctx.append_raw({
                     "type": "function_call",
-                    "call_id": tool_call_id,
-                    "name": tool_call_name,
+                    "call_id": tool_ctx.id,
+                    "name": tool_ctx.name,
                     "arguments": json.dumps(args),
                 })
 
@@ -124,7 +136,7 @@ async def stream_from_llm_api(widget: VerticalGroup, client, ctx: AgentContext):
                     # read, append a "user" role to the chat log with the image
                     ctx.append_raw({
                         "type": "function_call_output",
-                        "call_id": tool_call_id,
+                        "call_id": tool_ctx.id,
                         "output": "Screenshot captured.",
                     })
 
@@ -138,7 +150,7 @@ async def stream_from_llm_api(widget: VerticalGroup, client, ctx: AgentContext):
                 else:
                     ctx.append_raw({
                         "type": "function_call_output",
-                        "call_id": tool_call_id,
+                        "call_id": tool_ctx.id,
                         "output": json.dumps(result, default=list),
                     })
 
@@ -147,4 +159,4 @@ async def stream_from_llm_api(widget: VerticalGroup, client, ctx: AgentContext):
 
     # TODO: this is where plugin on_turn_end should be called
     if not spawned_continuation:
-        await synthesize_episodic_memory(client, ctx.model, ctx.messages)
+        await synthesize_episodic_memory(client, ctx.model_name, ctx.messages)
