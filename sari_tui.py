@@ -1,11 +1,12 @@
 from textual import work
 from openai import AsyncOpenAI, APIConnectionError
 from textual.app import App, ComposeResult
+from textual.reactive import reactive
 from textual.containers import VerticalGroup, VerticalScroll, HorizontalGroup
 from textual.widgets import Markdown, LoadingIndicator, RichLog, Label, Static, TabbedContent, TabPane
 from agent_tools3 import (NAVIGATION_TOOLS, MANIPULATION_TOOLS, PERCEPTION_TOOLS,
                            MEMORY_TOOLS, SWITCH_MODE_TOOL)
-from utils.utils import SARI_THEME
+from utils.utils import SARI_THEME, AgentContext
 from utils.llm_streaming import stream_from_llm_api as _stream_from_llm_api
 import os
 from utils.tui_widgets import (
@@ -34,12 +35,16 @@ class LLMResponse(VerticalGroup):
 
     BORDER_TITLE = MODEL_NAME
 
-    def __init__(self, prompt: str | None, mode: str = "navigation") -> None:
+    def __init__(self, ctx: AgentContext, prompt: str | None) -> None:
+        self.ctx = ctx
         self.prompt = prompt
-        self.mode = mode
         super().__init__()
 
     def compose(self) -> ComposeResult:
+        tokens_down = self.ctx.metadata['latest_prompt_tokens_down']
+        tokens_up = self.ctx.metadata['latest_prompt_tokens_up']
+        tokens_cost = self.ctx.metadata['latest_prompt_tokens_cost']
+
         yield LoadingIndicator()
 
         llm_thinking = LLMThinkingSummary()
@@ -50,7 +55,7 @@ class LLMResponse(VerticalGroup):
             yield Static("⏺", id="llm_resp_bullet")
             with VerticalGroup():
                 yield Markdown(id="llm_response_text")
-                yield Label("↑ ... Tok | ↓ ... Tok", id="token_usage_label")
+                yield Label(f"↑ {tokens_down} Tok | ↓ {tokens_up} Tok | ${tokens_cost}", id="token_usage_label")
 
         if DEBUG:
             yield RichLog(highlight=True, id="raw_log")
@@ -62,11 +67,7 @@ class LLMResponse(VerticalGroup):
 
     @work(exclusive=True)
     async def stream_from_llm_api(self):
-        def _set_mode(mode: str):
-            global current_mode
-            current_mode = mode
-
-        await _stream_from_llm_api(self, client, MODEL_NAME, chat_log, ALL_TOOLS, DEBUG, _set_mode)
+        await _stream_from_llm_api(self, client, self.ctx)
 
 
 class SariApp(App):
@@ -74,20 +75,35 @@ class SariApp(App):
     TITLE = "Sari Term"
     CSS_PATH = "sari_tui.tcss"
 
+
+    ctx = reactive(AgentContext(
+        messages=[],
+        system_prompt="",
+        tools=ALL_TOOLS,
+        model=MODEL_NAME,
+        metadata={
+            "current_mode": "navigation",
+            'latest_prompt_tokens_down': "...",
+            'latest_prompt_tokens_up': "...",
+            'latest_prompt_tokens_cost': "..."
+        }
+    ))
+
     def compose(self) -> ComposeResult:
         # yield Header()
         with TabbedContent():
             with TabPane("Main Agent"):
                 yield VerticalScroll(id="user_llm_screen")
                 with HorizontalGroup():
-                    yield MemoryDisplay()
-                    yield ModeDisplay()
-                yield LLMInput()
+                    yield MemoryDisplay(self.ctx)
+                    yield ModeDisplay(self.ctx)
+                yield LLMInput(self.ctx)
 
     def on_mount(self) -> None:
         self.sub_title = ""
         self.register_theme(SARI_THEME)
         self.theme = "sari"
+        self.ctx.tui_app = self
         self.query_one(VerticalScroll).mount(WelcomeHeader())
 
 

@@ -3,8 +3,11 @@ from textual.containers import VerticalGroup, VerticalScroll
 from agent_tools3 import dispatch_tool, TOOL_MODE_MAP
 from textual.widgets import LoadingIndicator, RichLog, Markdown, Label
 from utils.agent_utils import build_system_instruction, append_to_chat_log, synthesize_episodic_memory
+from utils.utils import AgentContext
 
-async def stream_from_llm_api(widget: VerticalGroup, client, model_name, chat_log, all_tools, debug, mode_setter):
+
+# model_name, chat_log, all_tools, debug, mode_setter
+async def stream_from_llm_api(widget: VerticalGroup, client, ctx: AgentContext):
     # Lazy import avoids a circular dependency: sari_tui2 → llm_streaming → sari_tui2.
     # By call time all modules are fully loaded so this is safe.
     from sari_tui import LLMThinkingSummary, LLMToolCallDisplay, ModeDisplay, LLMResponse
@@ -17,19 +20,19 @@ async def stream_from_llm_api(widget: VerticalGroup, client, model_name, chat_lo
 
     # TODO: Fix type checking here, make widget type hint LLMResponse
     if widget.prompt is not None:
-        append_to_chat_log(chat_log, "user", widget.prompt)
+        ctx.append_message("user", widget.prompt)
 
     # noinspection PyTypeChecker
     stream = await client.responses.create(
-        model=model_name,
+        model=ctx.model,
         instructions=build_system_instruction(),
-        input=chat_log,
+        input=ctx.messages,
         max_output_tokens=65536,
         reasoning={
             "effort": "low",
             "summary": "auto"
         },
-        tools=all_tools,
+        tools=ctx.tools,
         stream=True,
         parallel_tool_calls=False
     )
@@ -37,7 +40,7 @@ async def stream_from_llm_api(widget: VerticalGroup, client, model_name, chat_lo
     async for event in stream:
         widget.query_one(LoadingIndicator).display = False
 
-        if debug:
+        if ctx.debug_mode:
             widget.query_one(RichLog).write(str(event))
             widget.query_one(RichLog).write(event.type)
 
@@ -57,7 +60,7 @@ async def stream_from_llm_api(widget: VerticalGroup, client, model_name, chat_lo
             # LLM is finished saying something (not reasoning), update chat logs
             case "response.output_item.done":
                 if event.item.type == "message" and event.item.content:
-                    append_to_chat_log(chat_log, "assistant", event.item.content[0].text)
+                    ctx.append_message("assistant", event.item.content[0].text)
 
             # LLM has finished reasoning, close the thinking summary dropdown
             case "response.reasoning_summary_part.done" | "response.reasoning_text.done":
@@ -92,11 +95,11 @@ async def stream_from_llm_api(widget: VerticalGroup, client, model_name, chat_lo
                 # Reset tool_call_deltas
                 tool_call_deltas = ""
 
+                # TODO: implement dict to delegate handle_tool_call to plugin
                 if tool_call_display.tool_name == "switch_mode":
                     new_mode = args["mode"]
-                    mode_setter(new_mode)
+                    ctx.metadata['current_mode'] = new_mode
                     widget.mode = new_mode
-                    widget.app.query_one(ModeDisplay).update_mode(new_mode)
                     result = {"switched_to": new_mode}
                 elif (required_mode := TOOL_MODE_MAP.get(tool_call_display.tool_name)) and required_mode != widget.mode:
                     result = {"error": f"Mode mismatch: '{tool_call_display.tool_name}' requires '{required_mode}' mode. Call switch_mode(\"{required_mode}\") first."}
@@ -109,7 +112,7 @@ async def stream_from_llm_api(widget: VerticalGroup, client, model_name, chat_lo
                 # Make tool call display stop the loading animation
                 tool_call_display.tool_done()
 
-                chat_log.append({
+                ctx.append_raw({
                     "type": "function_call",
                     "call_id": tool_call_id,
                     "name": tool_call_name,
@@ -119,13 +122,13 @@ async def stream_from_llm_api(widget: VerticalGroup, client, model_name, chat_lo
                 if isinstance(result, dict) and "image_base64" in result:
                     # Since tools that directly return a base64 image cannot be
                     # read, append a "user" role to the chat log with the image
-                    chat_log.append({
+                    ctx.append_raw({
                         "type": "function_call_output",
                         "call_id": tool_call_id,
                         "output": "Screenshot captured.",
                     })
 
-                    chat_log.append({
+                    ctx.append_raw({
                         "role": "user",
                         "content": [{
                             "type": "input_image",
@@ -133,7 +136,7 @@ async def stream_from_llm_api(widget: VerticalGroup, client, model_name, chat_lo
                         }],
                     })
                 else:
-                    chat_log.append({
+                    ctx.append_raw({
                         "type": "function_call_output",
                         "call_id": tool_call_id,
                         "output": json.dumps(result, default=list),
@@ -142,5 +145,6 @@ async def stream_from_llm_api(widget: VerticalGroup, client, model_name, chat_lo
                 spawned_continuation = True
                 await widget.parent.mount(LLMResponse(None, widget.mode))
 
+    # TODO: this is where plugin on_turn_end should be called
     if not spawned_continuation:
-        await synthesize_episodic_memory(client, model_name, chat_log)
+        await synthesize_episodic_memory(client, ctx.model, ctx.messages)
