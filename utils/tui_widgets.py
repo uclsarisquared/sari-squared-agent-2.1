@@ -1,11 +1,13 @@
-
 from textual import on
 from textual.app import ComposeResult
+from textual import work
 from textual.containers import VerticalGroup, HorizontalGroup, VerticalScroll
-from textual.widgets import Markdown, LoadingIndicator, Collapsible, Label, Input, Static
+from textual.widgets import Markdown, LoadingIndicator, Collapsible, Label, Input, Static, RichLog
+from utils.llm_streaming import stream_from_llm_api as _stream_from_llm_api
 from textual.suggester import SuggestFromList
 from agent_tools3 import load_semantic_memory
 from utils.utils import AgentContext
+from openai import APIConnectionError
 
 COMMAND_LIST = [
     "/subagents enable",
@@ -24,6 +26,43 @@ Enter a prompt below. Use /<command> to run a command. Available commands are:
 - `/effort` high/medium/low/none
 """
 
+
+
+class LLMResponse(VerticalGroup):
+
+    def __init__(self, prompt: str | None, ctx: AgentContext) -> None:
+        self.ctx = ctx
+        self.prompt = prompt
+        self.border_title = ctx.model_name
+        super().__init__()
+
+    def compose(self) -> ComposeResult:
+        yield LoadingIndicator()
+
+        llm_thinking = LLMThinkingSummary()
+        llm_thinking.display = False
+        yield llm_thinking
+
+        with HorizontalGroup():
+            yield Static("⏺", id="llm_resp_bullet")
+            with VerticalGroup():
+                yield Markdown(id="llm_response_text")
+                yield Label(
+                    "↑ ... Tok | ↓ ... Tok | $...",
+                    id="token_usage_label"
+                )
+
+        if self.ctx.debug_mode:
+            yield RichLog(highlight=True, id="raw_log")
+
+        try:
+            self.stream_from_llm_api()
+        except APIConnectionError:
+            self.notify("Error connecting to LLM API.", severity="error")
+
+    @work(exclusive=True)
+    async def stream_from_llm_api(self):
+        await _stream_from_llm_api(self, self.ctx)
 
 class LLMThinkingSummary(VerticalGroup):
 

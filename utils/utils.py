@@ -3,6 +3,7 @@ from textual.app import App
 from textual.theme import Theme
 from abc import ABC
 from dataclasses import dataclass, field
+from openai import AsyncOpenAI
 
 
 # Encodes image to base64
@@ -20,6 +21,7 @@ class AgentContext:
     thinking_effort: str
     system_prompt: str
     tools: list[dict]
+    client: AsyncOpenAI
 
     messages: list[dict]
     debug_logs: str = ""

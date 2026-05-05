@@ -1,11 +1,11 @@
 import json
-from textual.containers import VerticalGroup, VerticalScroll
+from textual.containers import VerticalScroll
 from agent_tools3 import dispatch_tool, TOOL_MODE_MAP
 from textual.widgets import LoadingIndicator, RichLog, Markdown, Label
 from utils.agent_utils import build_system_instruction, append_to_chat_log, synthesize_episodic_memory
 from utils.utils import AgentContext
 from dataclasses import dataclass
-from tui_widgets import LLMToolCallDisplay
+from tui_widgets import LLMToolCallDisplay, LLMThinkingSummary, LLMResponse
 
 @dataclass
 class ToolCallContext:
@@ -15,17 +15,16 @@ class ToolCallContext:
     display: LLMToolCallDisplay = None
 
 # model_name, chat_log, all_tools, debug, mode_setter
-async def stream_from_llm_api(widget: VerticalGroup, client, ctx: AgentContext):
-    # Lazy import avoids a circular dependency: sari_tui2 → llm_streaming → sari_tui2.
-    # By call time all modules are fully loaded so this is safe.
-    from sari_tui import LLMThinkingSummary, LLMToolCallDisplay, ModeDisplay, LLMResponse
+async def stream_from_llm_api(widget: LLMResponse, ctx: AgentContext):
 
+    client = ctx.client
     tool_ctx = ToolCallContext()
     spawned_continuation = False
 
-    # Ignore type check, this works
-    if widget.prompt is not None:
-        ctx.append_message("user", widget.prompt)
+    if widget.prompt is None:
+        return
+
+    ctx.append_message("user", widget.prompt)
 
     # noinspection PyTypeChecker
     stream = await client.responses.create(
@@ -71,7 +70,8 @@ async def stream_from_llm_api(widget: VerticalGroup, client, ctx: AgentContext):
             case "response.reasoning_summary_part.done" | "response.reasoning_text.done":
                 widget.query_one(LLMThinkingSummary).done_thinking()
 
-            # LLM calls a tool, mount a tool call display
+            # LLM wants calls a tool, mount a tool call display
+            # Similarly, if LLM begins reasoning, enable the reasoning display
             case "response.output_item.added":
                 if event.item.type == "function_call":
                     tool_ctx.id = event.item.call_id
@@ -154,9 +154,9 @@ async def stream_from_llm_api(widget: VerticalGroup, client, ctx: AgentContext):
                         "output": json.dumps(result, default=list),
                     })
 
-                spawned_continuation = True
-                await widget.parent.mount(LLMResponse(None, widget.mode))
+                # spawned_continuation = True
+                # await widget.parent.mount(LLMResponse(None, widget.mode))
 
     # TODO: this is where plugin on_turn_end should be called
-    if not spawned_continuation:
-        await synthesize_episodic_memory(client, ctx.model_name, ctx.messages)
+    # if not spawned_continuation:
+    #     await synthesize_episodic_memory(client, ctx.model_name, ctx.messages)

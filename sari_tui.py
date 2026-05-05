@@ -1,17 +1,14 @@
-from textual import work
-from openai import AsyncOpenAI, APIConnectionError
+from openai import AsyncOpenAI
 from textual.app import App, ComposeResult
-from textual.containers import VerticalGroup, VerticalScroll, HorizontalGroup
-from textual.widgets import Markdown, LoadingIndicator, RichLog, Label, Static, TabbedContent, TabPane
+from textual.containers import VerticalScroll, HorizontalGroup
+from textual.widgets import TabbedContent, TabPane
 from agent_tools3 import (NAVIGATION_TOOLS, MANIPULATION_TOOLS, PERCEPTION_TOOLS,
                            MEMORY_TOOLS, SWITCH_MODE_TOOL)
 from utils.utils import SARI_THEME, AgentContext
-from utils.llm_streaming import stream_from_llm_api as _stream_from_llm_api
-import os
 from utils.tui_widgets import (
-    LLMThinkingSummary, LLMToolCallDisplay, UserPrompt,
     MemoryDisplay, ModeDisplay, LLMInput, WelcomeHeader,
 )
+import os
 
 # Configuration
 DEBUG = False
@@ -30,44 +27,6 @@ client = AsyncOpenAI(
 
 chat_log = []
 
-class LLMResponse(VerticalGroup):
-
-    BORDER_TITLE = MODEL_NAME
-
-    def __init__(self, prompt: str | None, ctx: AgentContext) -> None:
-        self.ctx = ctx
-        self.prompt = prompt
-        super().__init__()
-
-    def compose(self) -> ComposeResult:
-        yield LoadingIndicator()
-
-        llm_thinking = LLMThinkingSummary()
-        llm_thinking.display = False
-        yield llm_thinking
-
-        with HorizontalGroup():
-            yield Static("⏺", id="llm_resp_bullet")
-            with VerticalGroup():
-                yield Markdown(id="llm_response_text")
-                yield Label(
-                    "↑ ... Tok | ↓ ... Tok | $...",
-                    id="token_usage_label"
-                )
-
-        if DEBUG:
-            yield RichLog(highlight=True, id="raw_log")
-
-        try:
-            self.stream_from_llm_api()
-        except APIConnectionError:
-            self.notify("Error connecting to LLM API.", severity="error")
-
-    @work(exclusive=True)
-    async def stream_from_llm_api(self):
-        await _stream_from_llm_api(self, client, self.ctx)
-
-
 class SariApp(App):
 
     TITLE = "Sari Term"
@@ -81,7 +40,8 @@ class SariApp(App):
         metadata={
             "current_mode": "navigation",
         },
-        thinking_effort="low"
+        thinking_effort="low",
+        client=client,
     )
 
     def compose(self) -> ComposeResult:
