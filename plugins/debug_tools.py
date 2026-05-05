@@ -1,5 +1,4 @@
 import asyncio
-
 from utils.utils import AgentPlugin, AgentContext
 
 class DebugTools(AgentPlugin):
@@ -7,7 +6,7 @@ class DebugTools(AgentPlugin):
     AGENT_TOOLS = [
         {
             "type": "function",
-            "name": "MOVE_FWD",
+            "name": "SAMPLE_MOVE_FWD",
             "description": "Walk forward x units in Sari Sandbox.",
             "strict": True,
             "parameters": {
@@ -29,11 +28,12 @@ class DebugTools(AgentPlugin):
     """
 
     # Tool call handler be the same name as the tool, but all lowercase
-    async def move_fwd(self, args: dict) -> dict:
+    async def sample_move_fwd(self, args: dict) -> dict:
         await asyncio.sleep(3)
+        self.ctx.log("Called move_fwd()")
         return {
-            "status": f"move {args['meters']} success",
+            "status": f"move {args['meters']}m success",
         }
 
-def setup() -> AgentPlugin:
-    return DebugTools()
+def setup(context) -> AgentPlugin:
+    return DebugTools(context)

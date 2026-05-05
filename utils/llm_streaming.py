@@ -8,7 +8,7 @@ from textual.widgets import LoadingIndicator, RichLog, Markdown, Label, Static
 from utils.agent_utils import build_system_instruction, append_to_chat_log, synthesize_episodic_memory
 from utils.utils import AgentContext
 from dataclasses import dataclass
-from .tui_widgets import LLMToolCallDisplay, LLMThinkingSummary
+from .tui_widgets import LLMToolCallDisplay, LLMThinkingSummary, LoadingIcon
 
 
 @dataclass
@@ -36,7 +36,8 @@ class LLMResponse(VerticalGroup):
         yield llm_thinking
 
         with HorizontalGroup():
-            yield Static("⏺", id="llm_resp_bullet")
+            # yield Static("⏺", id="llm_resp_bullet")
+            yield LoadingIcon(id="llm_resp_bullet")
             with VerticalGroup():
                 yield Markdown(id="llm_response_text")
                 yield Label(
@@ -87,9 +88,13 @@ async def _stream_from_llm_api(widget: LLMResponse, ctx: AgentContext):
     async for event in stream:
         widget.query_one(LoadingIndicator).display = False
 
+        # widget.parent will be VerticalScroll
+        # Every text chunk will force the scroll to go down
+        widget.parent.scroll_end()
+
         if ctx.debug_mode:
-            widget.query_one(RichLog).write(str(event))
-            widget.query_one(RichLog).write(event.type)
+            ctx.log(str(event))
+            ctx.log(event.type)
 
         match event.type:
             # LLM response text delta (streaming)
@@ -132,7 +137,11 @@ async def _stream_from_llm_api(widget: LLMResponse, ctx: AgentContext):
             # TODO: usage.cost will possibly crash with local models, fix
             case "response.completed":
                 usage = event.response.usage
-                widget.query_one(Label).content = f"↑ {usage.input_tokens} Tok | ↓ {usage.output_tokens} Tok | ${usage.cost}"
+                widget.query_one(
+                    "#token_usage_label",
+                    Label
+                ).content = f"↑ {usage.input_tokens} Tok | ↓ {usage.output_tokens} Tok | ${usage.cost}"
+                widget.query_one(LoadingIcon).stop_spinner()
 
             # LLM is done sending function arguments, parse it
             case "response.function_call_arguments.done":

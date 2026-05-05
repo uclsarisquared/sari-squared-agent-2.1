@@ -1,4 +1,4 @@
-from textual import on
+from textual import on, events
 from textual.app import ComposeResult
 from textual.containers import VerticalGroup, HorizontalGroup, VerticalScroll
 from textual.widgets import Markdown, LoadingIndicator, Collapsible, Label, Input, Static, RichLog
@@ -55,9 +55,9 @@ class LLMToolCallDisplay(VerticalGroup):
     def compose(self) -> ComposeResult:
         yield LoadingIndicator()
         yield Label("OK")
-        self.add_class("tool_success")
 
     def tool_done(self, resp: str):
+        self.add_class("tool_success")
         self.query_one(Label).content = resp
         self.query_one(LoadingIndicator).display = False
 
@@ -106,7 +106,34 @@ class ModeDisplay(HorizontalGroup):
         self.app.query_one(MemoryDisplay).refresh_count()
 
 
-class LLMInput(HorizontalGroup):
+class LoadingIcon(Label):
+    SPINNER_ICONS = ["·", "✻", "✽", "✶", "✳", "✢"]
+    __spinner_idx = 0
+    __spinner_timer = None
+
+    def compose(self) -> ComposeResult:
+        yield Label("·", id="spinner_icon")
+
+    def on_mount(self) -> None:
+        self.__spinner_timer = self.set_interval(
+            0.4,
+            self.update_spinner,
+            name="spinner"
+        )
+
+    def stop_spinner(self):
+        self.__spinner_timer.pause()
+        self.query_one(Label).content = "⏺"
+
+    def update_spinner(self) -> None:
+        self.query_one(Label).content = self.SPINNER_ICONS[
+            self.__spinner_idx
+        ]
+        self.__spinner_idx = (self.__spinner_idx + 1) % len(self.SPINNER_ICONS)
+
+
+
+class LLMUserInput(HorizontalGroup):
 
     def __init__(self, ctx: AgentContext) -> None:
         self.ctx = ctx
@@ -120,14 +147,19 @@ class LLMInput(HorizontalGroup):
         if not user_input:
             return
 
-        self.parent.query_one(VerticalScroll).mount(UserPrompt(user_input))
+        # self.parent is the main app
+        vscroll = self.parent.query_one("#user_llm_screen", VerticalScroll)
+        vscroll.mount(UserPrompt(user_input))
         self.parent.sub_title = user_input
         self.query_one(Input).value = ""
-        self.parent.query_one(VerticalScroll).mount(
+        vscroll.mount(
             LLMResponse(
                 user_input, self.ctx
             )
         )
+
+        # Force scrolls down
+        vscroll.scroll_end()
 
     def compose(self) -> ComposeResult:
         yield Static(content="❯", id="input_arrow")

@@ -1,12 +1,12 @@
 from openai import AsyncOpenAI
 from textual.app import App, ComposeResult
 from textual.containers import VerticalScroll, HorizontalGroup
-from textual.widgets import TabbedContent, TabPane
+from textual.widgets import TabbedContent, TabPane, RichLog
 from agent_tools3 import (NAVIGATION_TOOLS, MANIPULATION_TOOLS, PERCEPTION_TOOLS,
                            MEMORY_TOOLS, SWITCH_MODE_TOOL)
-from utils.utils import SARI_THEME, AgentContext, load_plugins, read_markdown
+from utils.utils import SARI_THEME, AgentContext, read_markdown
 from utils.tui_widgets import (
-    MemoryDisplay, ModeDisplay, LLMInput, WelcomeHeader,
+    MemoryDisplay, ModeDisplay, LLMUserInput, WelcomeHeader,
 )
 import os
 
@@ -35,29 +35,31 @@ class SariApp(App):
 
     def __init__(self):
         self.ctx = AgentContext(
-            messages=[],
             base_system_prompt=BASE_PROMPT,
             model_name=MODEL_NAME,
-            metadata={
-                "current_mode": "navigation",
-            },
             thinking_effort="low",
             client=client,
             main_app=self,
-            plugins=load_plugins(PLUGIN_DIR)
+            plugin_dir=PLUGIN_DIR,
+            metadata={
+                'current_mode': 'navigation',
+            }
         )
 
         super().__init__()
 
     def compose(self) -> ComposeResult:
         # yield Header()
-        with TabbedContent():
-            with TabPane("Main Agent"):
+        with TabbedContent(initial="main_agent"):
+            with TabPane("🔍", id="debug_log_pane"):
+                yield RichLog(highlight=True, id="debug_log")
+            with TabPane("Main Agent", id="main_agent"):
                 yield VerticalScroll(id="user_llm_screen")
-                with HorizontalGroup():
-                    yield MemoryDisplay(self.ctx)
-                    yield ModeDisplay(self.ctx)
-                yield LLMInput(self.ctx)
+                with HorizontalGroup(id="plugin_debug_display"):
+                    pass
+                    # yield MemoryDisplay(self.ctx)
+                    # yield ModeDisplay(self.ctx)
+                yield LLMUserInput(self.ctx)
 
     def on_mount(self) -> None:
         self.sub_title = ""

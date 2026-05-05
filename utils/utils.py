@@ -1,50 +1,52 @@
 import base64
 from textual.theme import Theme
-from abc import ABC
+from abc import ABC, abstractmethod
 from textual.app import App
 from dataclasses import dataclass, field
 from openai import AsyncOpenAI
 from collections.abc import Callable
 import importlib.util
 import pathlib
+from textual.widgets import RichLog
 
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from sari_tui import SariApp
 
 # Encodes image to base64
 def encode_image(image_path: str) -> str:
     with open(image_path, "rb") as image_file:
         return base64.b64encode(image_file.read()).decode("utf-8")
 
-
-@dataclass
 class AgentContext:
     """Dataclass that holds all useful information about the current state and
     handles updating the terminal."""
 
-    # LLM-RELATED CONFIG
-    model_name: str
-    thinking_effort: str
-    # AsyncOpenAI Client
-    client: AsyncOpenAI
-    # Textual SariApp
-    main_app: App
-    # Loaded plugins
-    plugins: list[AgentPlugin]
-    base_system_prompt: str
+    def __init__(self, model_name: str, thinking_effort: str, client: AsyncOpenAI, main_app: SariApp, plugin_dir, base_system_prompt: str, metadata: dict = {}) -> None:
+        # LLM-RELATED CONFIG
+        self.model_name = model_name
+        self.thinking_effort = thinking_effort
+        # AsyncOpenAI Client
+        self.client = client
+        # Textual SariApp
+        self.main_app = main_app
+        # Loaded plugins
+        self.base_system_prompt = base_system_prompt
+        self.metadata: dict = metadata
 
-    messages: list[dict]
-    debug_logs: str = ""
-    tools: list[dict] = field(default_factory=list)
-    active_tool_calls: list = field(default_factory=list)
-    debug_mode: bool = False
+        self.plugins: list[AgentPlugin] = []
+        self.messages: list[dict] = []
+        self.tools: list[dict] = []
+        self.active_tool_calls: list = []
+        self.debug_mode: bool = False
 
-    # PLUGIN-RELATED
-    system_prompt: str = ""
-    metadata: dict = field(default_factory=dict)
+        # PLUGIN-RELATED
+        self.system_prompt: str = ""
 
-    __widget_update_handlers: list[Callable] = field(default_factory=list)
-    __tool_call_handlers: dict = field(default_factory=dict)
+        self.__widget_update_handlers: list[Callable] = []
+        self.__tool_call_handlers: dict = {}
 
-    def __post_init__(self):
+        self.load_plugins(plugin_dir)
         self.reload_system_prompt()
         self.reload_tools()
 
@@ -78,15 +80,58 @@ class AgentContext:
     def register_update_handler(self, handler: Callable) -> None:
         self.__widget_update_handlers.append(handler)
 
+    def log(self, msg: str) -> None:
+        self.main_app.query_one("#debug_log", RichLog).write(msg)
+
     def update_widgets(self) -> None:
         for handler_func in self.__widget_update_handlers:
             handler_func()
 
+    def load_plugins(self, directory_name: str) -> None:
+        # 1. Define the path to the folder
+        folder = pathlib.Path(directory_name)
+
+        # 2. Iterate over all .py files (excluding __init__.py)
+        for path in folder.glob("*.py"):
+            if path.name == "__init__.py":
+                continue
+
+            # 3. Create a module name from the file name
+            module_name = path.stem
+
+            # 4. Load the module spec and the module itself
+            spec = importlib.util.spec_from_file_location(module_name, path)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+
+            # 5. Look for the 'setup' function and call it
+            if hasattr(module, 'setup'):
+                setup_func = getattr(module, 'setup')
+                self.plugins.append(setup_func(self))
+
+
 
 class AgentPlugin(ABC):
-    PLUGIN_NAME: str = ""
-    AGENT_TOOLS = []
-    SYSTEM_PROMPT: str = ""
+    @property
+    @abstractmethod
+    def PLUGIN_NAME(self) -> str:
+        """Name of the plugin"""
+        pass
+
+    @property
+    @abstractmethod
+    def AGENT_TOOLS(self) -> list:
+        """List of tools available to the agent"""
+        pass
+
+    @property
+    @abstractmethod
+    def SYSTEM_PROMPT(self) -> str:
+        """Base system prompt logic"""
+        pass
+
+    def __init__(self, context: AgentContext):
+        self.ctx = context
 
     async def on_start(self, context: AgentContext) -> None: pass
 
@@ -97,32 +142,6 @@ class AgentPlugin(ABC):
 
     async def on_turn_end(self, context: AgentContext) -> None: pass
 
-
-def load_plugins(directory_name: str) -> list[AgentPlugin]:
-    # 1. Define the path to the folder
-    folder = pathlib.Path(directory_name)
-
-    plugins = []
-
-    # 2. Iterate over all .py files (excluding __init__.py)
-    for path in folder.glob("*.py"):
-        if path.name == "__init__.py":
-            continue
-
-        # 3. Create a module name from the file name
-        module_name = path.stem
-
-        # 4. Load the module spec and the module itself
-        spec = importlib.util.spec_from_file_location(module_name, path)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-
-        # 5. Look for the 'setup' function and call it
-        if hasattr(module, 'setup'):
-            setup_func = getattr(module, 'setup')
-            plugins.append(setup_func())
-
-    return plugins
 
 def read_markdown(file_path: str) -> str:
     path = pathlib.Path(file_path)
@@ -139,7 +158,7 @@ SARI_THEME = Theme(
         warning="#fe8019",
         error="#fb4934",
         success="#b8bb26",
-        accent="#fabd2f",
+        accent="#F1A361",
         foreground="#a3a3a3",
         background="#000000",
         surface="#3c3836",
