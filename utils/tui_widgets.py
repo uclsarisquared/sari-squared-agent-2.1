@@ -1,13 +1,10 @@
 from textual import on
 from textual.app import ComposeResult
-from textual import work
 from textual.containers import VerticalGroup, HorizontalGroup, VerticalScroll
 from textual.widgets import Markdown, LoadingIndicator, Collapsible, Label, Input, Static, RichLog
-from utils.llm_streaming import stream_from_llm_api as _stream_from_llm_api
 from textual.suggester import SuggestFromList
 from agent_tools3 import load_semantic_memory
 from utils.utils import AgentContext
-from openai import APIConnectionError
 
 COMMAND_LIST = [
     "/subagents enable",
@@ -25,44 +22,6 @@ Enter a prompt below. Use /<command> to run a command. Available commands are:
 - `/subagents` enable/disable
 - `/effort` high/medium/low/none
 """
-
-
-
-class LLMResponse(VerticalGroup):
-
-    def __init__(self, prompt: str | None, ctx: AgentContext) -> None:
-        self.ctx = ctx
-        self.prompt = prompt
-        self.border_title = ctx.model_name
-        super().__init__()
-
-    def compose(self) -> ComposeResult:
-        yield LoadingIndicator()
-
-        llm_thinking = LLMThinkingSummary()
-        llm_thinking.display = False
-        yield llm_thinking
-
-        with HorizontalGroup():
-            yield Static("⏺", id="llm_resp_bullet")
-            with VerticalGroup():
-                yield Markdown(id="llm_response_text")
-                yield Label(
-                    "↑ ... Tok | ↓ ... Tok | $...",
-                    id="token_usage_label"
-                )
-
-        if self.ctx.debug_mode:
-            yield RichLog(highlight=True, id="raw_log")
-
-        try:
-            self.stream_from_llm_api()
-        except APIConnectionError:
-            self.notify("Error connecting to LLM API.", severity="error")
-
-    @work(exclusive=True)
-    async def stream_from_llm_api(self):
-        await _stream_from_llm_api(self, self.ctx)
 
 class LLMThinkingSummary(VerticalGroup):
 
@@ -98,7 +57,8 @@ class LLMToolCallDisplay(VerticalGroup):
         yield Label("OK")
         self.add_class("tool_success")
 
-    def tool_done(self):
+    def tool_done(self, resp: str):
+        self.query_one(Label).content = resp
         self.query_one(LoadingIndicator).display = False
 
 
@@ -154,7 +114,7 @@ class LLMInput(HorizontalGroup):
 
     @on(Input.Submitted)
     def on_button_pressed(self) -> None:
-        import sari_tui
+        from .llm_streaming import LLMResponse
         user_input = self.query_one(Input).value
 
         if not user_input:
@@ -164,7 +124,7 @@ class LLMInput(HorizontalGroup):
         self.parent.sub_title = user_input
         self.query_one(Input).value = ""
         self.parent.query_one(VerticalScroll).mount(
-            sari_tui.LLMResponse(
+            LLMResponse(
                 user_input, self.ctx
             )
         )

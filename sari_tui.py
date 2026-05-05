@@ -4,7 +4,7 @@ from textual.containers import VerticalScroll, HorizontalGroup
 from textual.widgets import TabbedContent, TabPane
 from agent_tools3 import (NAVIGATION_TOOLS, MANIPULATION_TOOLS, PERCEPTION_TOOLS,
                            MEMORY_TOOLS, SWITCH_MODE_TOOL)
-from utils.utils import SARI_THEME, AgentContext
+from utils.utils import SARI_THEME, AgentContext, load_plugins, read_markdown
 from utils.tui_widgets import (
     MemoryDisplay, ModeDisplay, LLMInput, WelcomeHeader,
 )
@@ -12,8 +12,10 @@ import os
 
 # Configuration
 DEBUG = False
-MODEL_NAME = "qwen/qwen3.5-27b"
-# MODEL_NAME = "deepseek/deepseek-v4-flash"
+# MODEL_NAME = "qwen/qwen3.5-27b"
+MODEL_NAME = "deepseek/deepseek-v4-flash"
+PLUGIN_DIR = "plugins"
+BASE_PROMPT = read_markdown("memory/SARI.md")
 
 ALL_TOOLS = NAVIGATION_TOOLS + MANIPULATION_TOOLS + PERCEPTION_TOOLS + MEMORY_TOOLS + [SWITCH_MODE_TOOL]
 # ALL_TOOLS = []
@@ -25,24 +27,27 @@ client = AsyncOpenAI(
     api_key=os.environ['SARI_OPENROUTER_API_KEY']
 )
 
-chat_log = []
 
 class SariApp(App):
 
     TITLE = "Sari Term"
     CSS_PATH = "sari_tui.tcss"
 
-    ctx = AgentContext(
-        messages=[],
-        system_prompt="",
-        tools=ALL_TOOLS,
-        model_name=MODEL_NAME,
-        metadata={
-            "current_mode": "navigation",
-        },
-        thinking_effort="low",
-        client=client,
-    )
+    def __init__(self):
+        self.ctx = AgentContext(
+            messages=[],
+            base_system_prompt=BASE_PROMPT,
+            model_name=MODEL_NAME,
+            metadata={
+                "current_mode": "navigation",
+            },
+            thinking_effort="low",
+            client=client,
+            main_app=self,
+            plugins=load_plugins(PLUGIN_DIR)
+        )
+
+        super().__init__()
 
     def compose(self) -> ComposeResult:
         # yield Header()

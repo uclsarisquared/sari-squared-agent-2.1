@@ -1,21 +1,64 @@
 import json
-from textual.containers import VerticalScroll
+from openai import APIConnectionError
+from textual import work
+from textual.app import ComposeResult
+from textual.containers import VerticalScroll, VerticalGroup, HorizontalGroup
 from agent_tools3 import dispatch_tool, TOOL_MODE_MAP
-from textual.widgets import LoadingIndicator, RichLog, Markdown, Label
+from textual.widgets import LoadingIndicator, RichLog, Markdown, Label, Static
 from utils.agent_utils import build_system_instruction, append_to_chat_log, synthesize_episodic_memory
 from utils.utils import AgentContext
 from dataclasses import dataclass
-from tui_widgets import LLMToolCallDisplay, LLMThinkingSummary, LLMResponse
+from .tui_widgets import LLMToolCallDisplay, LLMThinkingSummary
+
 
 @dataclass
 class ToolCallContext:
-    id: str = None
+    call_id: str = None
     name: str = None
     deltas: str = ""
     display: LLMToolCallDisplay = None
 
+class LLMResponse(VerticalGroup):
+
+    def __init__(self, prompt: str | None, ctx: AgentContext) -> None:
+        self.ctx = ctx
+        self.prompt = prompt
+        super().__init__()
+
+    def on_mount(self):
+        self.border_title = self.ctx.model_name
+
+    def compose(self) -> ComposeResult:
+        yield LoadingIndicator()
+
+        llm_thinking = LLMThinkingSummary()
+        llm_thinking.display = False
+        yield llm_thinking
+
+        with HorizontalGroup():
+            yield Static("⏺", id="llm_resp_bullet")
+            with VerticalGroup():
+                yield Markdown(id="llm_response_text")
+                yield Label(
+                    "↑ ... Tok | ↓ ... Tok | $...",
+                    id="token_usage_label"
+                )
+
+        if self.ctx.debug_mode:
+            yield RichLog(highlight=True, id="raw_log")
+
+        try:
+            self.stream_from_llm_api()
+        except APIConnectionError:
+            self.notify("Error connecting to LLM API.", severity="error")
+
+    @work(exclusive=True)
+    async def stream_from_llm_api(self):
+        await _stream_from_llm_api(self, self.ctx)
+
+
 # model_name, chat_log, all_tools, debug, mode_setter
-async def stream_from_llm_api(widget: LLMResponse, ctx: AgentContext):
+async def _stream_from_llm_api(widget: LLMResponse, ctx: AgentContext):
 
     client = ctx.client
     tool_ctx = ToolCallContext()
@@ -29,7 +72,7 @@ async def stream_from_llm_api(widget: LLMResponse, ctx: AgentContext):
     # noinspection PyTypeChecker
     stream = await client.responses.create(
         model=ctx.model_name,
-        instructions=build_system_instruction(),
+        instructions=ctx.system_prompt,
         input=ctx.messages,
         max_output_tokens=65536,
         reasoning={
@@ -74,10 +117,10 @@ async def stream_from_llm_api(widget: LLMResponse, ctx: AgentContext):
             # Similarly, if LLM begins reasoning, enable the reasoning display
             case "response.output_item.added":
                 if event.item.type == "function_call":
-                    tool_ctx.id = event.item.call_id
+                    tool_ctx.call_id = event.item.call_id
                     tool_ctx.name = event.item.name
                     tool_ctx.display = LLMToolCallDisplay(event.item.name)
-                    await widget.parent.query_one(VerticalScroll).mount(tool_ctx.display)
+                    await widget.parent.mount(tool_ctx.display)
                 if event.item.type == "reasoning":
                     widget.query_one(LLMThinkingSummary).display = True
 
@@ -90,11 +133,6 @@ async def stream_from_llm_api(widget: LLMResponse, ctx: AgentContext):
             case "response.completed":
                 usage = event.response.usage
                 widget.query_one(Label).content = f"↑ {usage.input_tokens} Tok | ↓ {usage.output_tokens} Tok | ${usage.cost}"
-                ctx.update_token_metrics(
-                    up=usage.input_tokens,
-                    down=usage.output_tokens,
-                    cost=usage.cost
-                )
 
             # LLM is done sending function arguments, parse it
             case "response.function_call_arguments.done":
@@ -107,52 +145,60 @@ async def stream_from_llm_api(widget: LLMResponse, ctx: AgentContext):
                 # Reset tool_call_deltas
                 tool_ctx.deltas = ""
 
-                # TODO: implement dict to delegate handle_tool_call to plugin
-                if tool_ctx.name == "switch_mode":
-                    new_mode = args["mode"]
-                    ctx.metadata['current_mode'] = new_mode
-                    widget.mode = new_mode
-                    result = {"switched_to": new_mode}
-                elif (required_mode := TOOL_MODE_MAP.get(tool_ctx.name)) and required_mode != widget.mode:
-                    result = {"error": f"Mode mismatch: '{tool_ctx.name}' requires '{required_mode}' mode. Call switch_mode(\"{required_mode}\") first."}
-                else:
-                    try:
-                        result = await dispatch_tool(tool_ctx.name, args)
-                    except Exception as e:
-                        result = {"error": str(e)}
-
-                # Make tool call display stop the loading animation
-                tool_ctx.display.tool_done()
-
-                ctx.append_raw({
+                ctx.append_msg_raw({
                     "type": "function_call",
-                    "call_id": tool_ctx.id,
+                    "call_id": tool_ctx.call_id,
                     "name": tool_ctx.name,
                     "arguments": json.dumps(args),
                 })
 
-                if isinstance(result, dict) and "image_base64" in result:
-                    # Since tools that directly return a base64 image cannot be
-                    # read, append a "user" role to the chat log with the image
-                    ctx.append_raw({
-                        "type": "function_call_output",
-                        "call_id": tool_ctx.id,
-                        "output": "Screenshot captured.",
-                    })
+                # TODO: implement dict to delegate handle_tool_call to plugin
+                # if tool_ctx.name == "switch_mode":
+                #     new_mode = args["mode"]
+                #     ctx.metadata['current_mode'] = new_mode
+                #     widget.mode = new_mode
+                #     result = {"switched_to": new_mode}
+                # elif (required_mode := TOOL_MODE_MAP.get(tool_ctx.name)) and required_mode != widget.mode:
+                #     result = {"error": f"Mode mismatch: '{tool_ctx.name}' requires '{required_mode}' mode. Call switch_mode(\"{required_mode}\") first."}
+                # else:
+                #     try:
+                #         result = await dispatch_tool(tool_ctx.name, args)
+                #     except Exception as e:
+                #         result = {"error": str(e)}
 
-                    ctx.append_raw({
-                        "role": "user",
-                        "content": [{
-                            "type": "input_image",
-                            "image_url": f"data:{result['mimeType']};base64,{result['image_base64']}",
-                        }],
-                    })
-                else:
-                    ctx.append_raw({
-                        "type": "function_call_output",
-                        "call_id": tool_ctx.id,
-                        "output": json.dumps(result, default=list),
-                    })
+                result = await ctx.dispatch_tool(tool_ctx.name, args)
+
+                # Make tool call display stop the loading animation
+                tool_ctx.display.tool_done(str(result))
+
+                # if isinstance(result, dict) and "image_base64" in result:
+                #     # Since tools that directly return a base64 image cannot be
+                #     # read, append a "user" role to the chat log with the image
+                #     ctx.append_msg_raw({
+                #         "type": "function_call_output",
+                #         "call_id": tool_ctx.call_id,
+                #         "output": "Screenshot captured.",
+                #     })
+                #
+                #     ctx.append_msg_raw({
+                #         "role": "user",
+                #         "content": [{
+                #             "type": "input_image",
+                #             "image_url": f"data:{result['mimeType']};base64,{result['image_base64']}",
+                #         }],
+                #     })
+                # else:
+                #     ctx.append_msg_raw({
+                #         "type": "function_call_output",
+                #         "call_id": tool_ctx.call_id,
+                #         "output": json.dumps(result, default=list),
+                #     })
+
+                ctx.append_msg_raw({
+                    "type": "function_call_output",
+                    "call_id": tool_ctx.call_id,
+                    "output": json.dumps(result, default=list),
+                })
 
                 # spawned_continuation = True
                 # await widget.parent.mount(LLMResponse(None, widget.mode))
