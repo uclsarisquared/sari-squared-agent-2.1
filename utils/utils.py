@@ -141,6 +141,8 @@ class AgentPlugin(ABC):
         """Base system prompt logic"""
         pass
 
+    TUI_COMMAND_HANDLERS: dict[str, Callable] = {}
+
     def __init__(self, context: AgentContext):
         self.ctx = context
 

@@ -159,25 +159,13 @@ async def _stream_from_llm_api(widget: LLMResponse, ctx: AgentContext):
                     "arguments": json.dumps(args),
                 })
 
-                # if tool_ctx.name == "switch_mode":
-                #     new_mode = args["mode"]
-                #     ctx.metadata['current_mode'] = new_mode
-                #     widget.mode = new_mode
-                #     result = {"switched_to": new_mode}
-                # elif (required_mode := TOOL_MODE_MAP.get(tool_ctx.name)) and required_mode != widget.mode:
-                #     result = {"error": f"Mode mismatch: '{tool_ctx.name}' requires '{required_mode}' mode. Call switch_mode(\"{required_mode}\") first."}
-                # else:
-                #     try:
-                #         result = await dispatch_tool(tool_ctx.name, args)
-                #     except Exception as e:
-                #         result = {"error": str(e)}
-
+                # Run the function for the requested tool call
                 result = await ctx.dispatch_tool(tool_ctx.name, args)
 
                 # Make tool call display stop the loading animation
                 tool_ctx.display.tool_done(str(result))
 
-                handle_tools_with_image_response(result, ctx, tool_ctx)
+                append_tool_result_to_chat_log(result, ctx, tool_ctx)
 
                 # spawned_continuation = True
                 await widget.parent.mount(LLMResponse(None, ctx))
@@ -186,7 +174,7 @@ async def _stream_from_llm_api(widget: LLMResponse, ctx: AgentContext):
     # if not spawned_continuation:
     #     await synthesize_episodic_memory(client, ctx.model_name, ctx.messages)
 
-def handle_tools_with_image_response(result: dict, ctx: AgentContext, tool_ctx: ToolCallContext):
+def append_tool_result_to_chat_log(result: dict, ctx: AgentContext, tool_ctx: ToolCallContext):
     if isinstance(result, dict) and "image_base64" in result:
         # Since tools that directly return a base64 image cannot be
         # read, append a "user" role to the chat log with the image
@@ -199,8 +187,8 @@ def handle_tools_with_image_response(result: dict, ctx: AgentContext, tool_ctx: 
         ctx.append_msg_raw({
             "role": "user",
             "content": [{
-                "type": "input_image",
-                "image_url": f"data:{result['mimeType']};base64,{result['image_base64']}",
+                "type": "image_url",
+                "url": f"data:{result['mimeType']};base64,{result['image_base64']}",
             }],
         })
     else:

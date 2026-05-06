@@ -55,6 +55,10 @@ class Subagents(AgentPlugin):
                 "goal_prompt": {
                     "type": "string",
                     "description": "Goal prompt the subagent will use to determine if end is met.",
+                },
+                "subagent_id": {
+                    "type": "string",
+                    "description": "A compact, unique identifier for the sub-agent being spawned. No spaces. Must be newly generated — do not reuse your own ID or any existing agent's ID."
                 }
             },
             required_arguments=["input_prompt", "goal_prompt"],
@@ -85,6 +89,10 @@ class Subagents(AgentPlugin):
                     "type": "string",
                     "description": "Relevant spatial data, positions, zones, or observations the parent agent should know about."
                 },
+                "subagent_id": {
+                    "type": "string",
+                    "description": "Your unique sub-agent ID."
+                }
             },
             required_arguments=["result", "confidence", "success"],
         )
@@ -96,14 +104,13 @@ class Subagents(AgentPlugin):
     """
 
     def __init__(self, context):
-        # Setup subagent context
+        # Subagent's own AgentContext
         self.sub_ctx = None
 
         self.subagent_count = 0
 
-        self.subagent_finished = asyncio.Event()
-        self.subagent_result = None
-        self.tab_pane: TabPane = None
+        self.subagent_finished_tracker = {}
+        self.subagent_results = {}
 
         super().__init__(context)
 
@@ -118,37 +125,42 @@ class Subagents(AgentPlugin):
         )
         self.sub_ctx.inherit_plugins(self.ctx)
         self.ctx.log(f"Subagent sees {len(self.sub_ctx.plugins)} plugins and {len(self.sub_ctx.tools)} tools.")
-        self.ctx.log(str(self.ctx.messages))
 
-        prompt = f"{args['input_prompt']}\n\n**END GOAL:** {args['goal_prompt']}"
-        self.tab_pane = TabPane(
-            f"🤖 #{self.subagent_count}",
-            SubagentScreen(
-                prompt,
-                self.sub_ctx
-            ),
-        )
+        # Setup sub-agents TabPane
+        initial_prompt = f"{args['input_prompt']}\n\n**END GOAL:** {args['goal_prompt']}\n\nYour subagent ID is: `{args['subagent_id']}`"
         await self.ctx.main_app.query_one(TabbedContent).add_pane(
-            pane=self.tab_pane
+            pane=TabPane(
+            f"🤖#{self.subagent_count}",
+            SubagentScreen(
+                    initial_prompt,
+                    self.sub_ctx
+                ),
+            )
         )
+
+        # Update subagent count (for tracking purposes)
         self.subagent_count += 1
 
-        # Wait for subagent to call "report to parent"
-        await self.subagent_finished.wait()
-        result = copy.deepcopy(self.subagent_result)
+        sid = args["subagent_id"]
 
-        # Clear the event flag
-        self.subagent_finished.clear()
-        # Clear the result
-        # This should be a futures() but I'm not sure how
-        # we can access Textual's event loop
-        self.subagent_result = None
+        if sid in self.subagent_finished_tracker:
+            return {"success": False, "message": f"Conflicting agent ID {sid}. Make sure agent ID's are unique."}
+
+        self.subagent_finished_tracker[sid] = asyncio.Event()
+
+        event_ptr = self.subagent_finished_tracker[sid]
+
+        # Wait for subagent to call "report_to_parent"
+        await event_ptr.wait()
+        # Save the result
+        result = copy.deepcopy(self.subagent_results)
 
         return result
 
     async def report_to_parent(self, args: dict) -> dict:
-        self.subagent_result = args
-        self.subagent_finished.set()
+        sid = args["subagent_id"]
+        self.subagent_results[sid] = args
+        self.subagent_finished_tracker[sid].set()
 
         # llm_worker = self.tab_pane.query_one(LLMResponse).llm_worker
         # if llm_worker:
@@ -156,7 +168,7 @@ class Subagents(AgentPlugin):
 
         return {
             "success": True,
-            "message": "You have reported to the parent agent successfully. Please end this conversation."
+            "message": "Report received. You are done — do not call any further tools or produce any further output."
         }
 
 
