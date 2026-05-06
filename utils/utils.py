@@ -1,7 +1,6 @@
 import base64
 from textual.theme import Theme
 from abc import ABC, abstractmethod
-from textual.app import App
 from dataclasses import dataclass, field
 from openai import AsyncOpenAI
 from collections.abc import Callable

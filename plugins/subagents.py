@@ -17,7 +17,8 @@ You have been spawned by a parent agent to complete a single, clearly defined go
 - Use available tools as needed to gather information or take actions.
 - When your goal is complete, call the `REPORT_TO_PARENT` tool with a 
 structured summary of your findings.
-- ALWAYS call the tool `REPORT_TO_PARENT` when you're done.
+- Call `report_to_parent` exactly once. It is a terminal action — once called, 
+stop all activity immediately. Do not call any other tool after it.
 """
 
 
@@ -119,7 +120,7 @@ class Subagents(AgentPlugin):
         self.ctx.log(f"Subagent sees {len(self.sub_ctx.plugins)} plugins and {len(self.sub_ctx.tools)} tools.")
         self.ctx.log(str(self.ctx.messages))
 
-        prompt = f"{args['input_prompt']}\n\n{args['goal_prompt']}"
+        prompt = f"{args['input_prompt']}\n\n**END GOAL:** {args['goal_prompt']}"
         self.tab_pane = TabPane(
             f"🤖 #{self.subagent_count}",
             SubagentScreen(
@@ -134,8 +135,8 @@ class Subagents(AgentPlugin):
 
         # Wait for subagent to call "report to parent"
         await self.subagent_finished.wait()
-
         result = copy.deepcopy(self.subagent_result)
+
         # Clear the event flag
         self.subagent_finished.clear()
         # Clear the result
@@ -148,9 +149,11 @@ class Subagents(AgentPlugin):
     async def report_to_parent(self, args: dict) -> dict:
         self.subagent_result = args
         self.subagent_finished.set()
+
         # llm_worker = self.tab_pane.query_one(LLMResponse).llm_worker
         # if llm_worker:
         #     llm_worker.cancel()
+
         return {
             "success": True,
             "message": "You have reported to the parent agent successfully. Please end this conversation."

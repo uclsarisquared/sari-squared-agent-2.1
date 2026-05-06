@@ -159,7 +159,6 @@ async def _stream_from_llm_api(widget: LLMResponse, ctx: AgentContext):
                     "arguments": json.dumps(args),
                 })
 
-                # TODO: implement dict to delegate handle_tool_call to plugin
                 # if tool_ctx.name == "switch_mode":
                 #     new_mode = args["mode"]
                 #     ctx.metadata['current_mode'] = new_mode
@@ -178,34 +177,7 @@ async def _stream_from_llm_api(widget: LLMResponse, ctx: AgentContext):
                 # Make tool call display stop the loading animation
                 tool_ctx.display.tool_done(str(result))
 
-                # if isinstance(result, dict) and "image_base64" in result:
-                #     # Since tools that directly return a base64 image cannot be
-                #     # read, append a "user" role to the chat log with the image
-                #     ctx.append_msg_raw({
-                #         "type": "function_call_output",
-                #         "call_id": tool_ctx.call_id,
-                #         "output": "Screenshot captured.",
-                #     })
-                #
-                #     ctx.append_msg_raw({
-                #         "role": "user",
-                #         "content": [{
-                #             "type": "input_image",
-                #             "image_url": f"data:{result['mimeType']};base64,{result['image_base64']}",
-                #         }],
-                #     })
-                # else:
-                #     ctx.append_msg_raw({
-                #         "type": "function_call_output",
-                #         "call_id": tool_ctx.call_id,
-                #         "output": json.dumps(result, default=list),
-                #     })
-
-                ctx.append_msg_raw({
-                    "type": "function_call_output",
-                    "call_id": tool_ctx.call_id,
-                    "output": json.dumps(result, default=list),
-                })
+                handle_tools_with_image_response(result, ctx, tool_ctx)
 
                 # spawned_continuation = True
                 await widget.parent.mount(LLMResponse(None, ctx))
@@ -213,3 +185,27 @@ async def _stream_from_llm_api(widget: LLMResponse, ctx: AgentContext):
     # TODO: this is where plugin on_turn_end should be called
     # if not spawned_continuation:
     #     await synthesize_episodic_memory(client, ctx.model_name, ctx.messages)
+
+def handle_tools_with_image_response(result: dict, ctx: AgentContext, tool_ctx: ToolCallContext):
+    if isinstance(result, dict) and "image_base64" in result:
+        # Since tools that directly return a base64 image cannot be
+        # read, append a "user" role to the chat log with the image
+        ctx.append_msg_raw({
+            "type": "function_call_output",
+            "call_id": tool_ctx.call_id,
+            "output": "Screenshot captured.",
+        })
+
+        ctx.append_msg_raw({
+            "role": "user",
+            "content": [{
+                "type": "input_image",
+                "image_url": f"data:{result['mimeType']};base64,{result['image_base64']}",
+            }],
+        })
+    else:
+        ctx.append_msg_raw({
+            "type": "function_call_output",
+            "call_id": tool_ctx.call_id,
+            "output": json.dumps(result),
+        })
