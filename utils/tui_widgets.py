@@ -71,7 +71,8 @@ class UserPrompt(HorizontalGroup):
         super().__init__()
 
     def compose(self) -> ComposeResult:
-        yield Markdown(markdown="❯ " + self.prompt, id="user_prompt")
+        yield Static(content=" ❯", id="input_arrow")
+        yield Markdown(markdown=self.prompt, id="user_prompt")
 
 
 class MemoryDisplay(HorizontalGroup):
@@ -116,14 +117,17 @@ class LoadingIcon(Label):
 
     def on_mount(self) -> None:
         self.__spinner_timer = self.set_interval(
-            0.4,
+            0.5,
             self.update_spinner,
             name="spinner"
         )
 
     def stop_spinner(self):
         self.__spinner_timer.pause()
-        self.query_one(Label).content = "⏺"
+        label = self.query_one(Label)
+        label.content = "⏺"
+        label.add_class("spinner_done")
+
 
     def update_spinner(self) -> None:
         self.query_one(Label).content = self.SPINNER_ICONS[

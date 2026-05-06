@@ -16,11 +16,22 @@ UserPrompt {
     align-vertical: middle;
     padding-top: 1;
     color: white;
-    align-horizontal: right;
+    align-horizontal: left;
 }
 
 #user_prompt {
     color: white;
+    margin-right: 5;
+    margin-left: 0;
+    offset-x: -1;
+}
+
+#spinner_icon {
+    opacity: 50%;
+}
+
+.spinner_done {
+    opacity: 100%;
 }
 
 LLMToolCallDisplay {

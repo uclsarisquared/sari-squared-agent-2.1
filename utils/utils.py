@@ -9,7 +9,8 @@ import importlib.util
 import pathlib
 from textual.widgets import RichLog
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
+
 if TYPE_CHECKING:
     from sari_tui import SariApp
 
@@ -19,10 +20,12 @@ def encode_image(image_path: str) -> str:
         return base64.b64encode(image_file.read()).decode("utf-8")
 
 class AgentContext:
-    """Dataclass that holds all useful information about the current state and
-    handles updating the terminal."""
+    """
+    Dataclass that holds all useful information about the current state of
+    the entire program.
+    """
 
-    def __init__(self, model_name: str, thinking_effort: str, client: AsyncOpenAI, main_app: SariApp, plugin_dir, base_system_prompt: str, metadata: dict = {}) -> None:
+    def __init__(self, model_name: str, thinking_effort: str, client: AsyncOpenAI, main_app: SariApp, base_system_prompt: str, plugin_dir = None, metadata: dict = {}) -> None:
         # LLM-RELATED CONFIG
         self.model_name = model_name
         self.thinking_effort = thinking_effort
@@ -46,7 +49,13 @@ class AgentContext:
         self.__widget_update_handlers: list[Callable] = []
         self.__tool_call_handlers: dict = {}
 
-        self.load_plugins(plugin_dir)
+        if plugin_dir:
+            self.load_plugins(plugin_dir)
+            self.reload_system_prompt()
+            self.reload_tools()
+
+    def inherit_plugins(self, context: AgentContext) -> None:
+        self.plugins = context.plugins
         self.reload_system_prompt()
         self.reload_tools()
 
@@ -57,15 +66,18 @@ class AgentContext:
 
     def reload_tools(self) -> None:
         for plugin in self.plugins:
-            self.tools += plugin.AGENT_TOOLS
+            tool_dict = plugin.assemble_tool_dicts()
+            self.tools += tool_dict
             # Load tool call handlers
-            for tool in plugin.AGENT_TOOLS:
+            for tool in tool_dict:
                 name = tool["name"]
                 try:
+                    # TODO: Check for conflicting tool names
                     self.__tool_call_handlers[name] = getattr(plugin, name.lower())
                 except AttributeError:
                     raise AttributeError(
-                        "Is the tool handler function name the same as the tool but lowercase?"
+                        "Did you setup a function to handle each tool? "
+                        "Is the tool handler's function name the same as the tool but lowercase?"
                     )
 
     async def dispatch_tool(self, tool_name: str, args: dict) -> dict:
@@ -120,7 +132,7 @@ class AgentPlugin(ABC):
 
     @property
     @abstractmethod
-    def AGENT_TOOLS(self) -> list:
+    def AGENT_TOOLS(self) -> list[ToolDefinition]:
         """List of tools available to the agent"""
         pass
 
@@ -133,6 +145,12 @@ class AgentPlugin(ABC):
     def __init__(self, context: AgentContext):
         self.ctx = context
 
+    def assemble_tool_dicts(self) -> list[dict]:
+        tools = []
+        for tooldef in self.AGENT_TOOLS:
+            tools.append(tooldef.to_dict())
+        return tools
+
     async def on_start(self, context: AgentContext) -> None: pass
 
     async def on_turn_start(self, context: AgentContext) -> None: pass
@@ -141,6 +159,29 @@ class AgentPlugin(ABC):
                               context: AgentContext) -> None: pass
 
     async def on_turn_end(self, context: AgentContext) -> None: pass
+
+
+@dataclass
+class ToolDefinition:
+    name: str
+    description: str
+    input_arguments: dict[str, Any]
+    required_arguments: list[str]
+    strict: bool = True
+
+    def to_dict(self) -> dict:
+        return {
+            "type": "function",
+            "name": self.name,
+            "description": self.description,
+            "parameters": {
+                "type": "object",
+                "properties": self.input_arguments,
+                "required": self.required_arguments,
+                "additionalProperties": False,
+            },
+            "strict": self.strict,
+        }
 
 
 def read_markdown(file_path: str) -> str:

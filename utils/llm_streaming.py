@@ -23,6 +23,7 @@ class LLMResponse(VerticalGroup):
     def __init__(self, prompt: str | None, ctx: AgentContext) -> None:
         self.ctx = ctx
         self.prompt = prompt
+        self.llm_worker = None
         super().__init__()
 
     def on_mount(self):
@@ -45,11 +46,11 @@ class LLMResponse(VerticalGroup):
                     id="token_usage_label"
                 )
 
-        if self.ctx.debug_mode:
-            yield RichLog(highlight=True, id="raw_log")
+        # if self.ctx.debug_mode:
+        #     yield RichLog(highlight=True, id="raw_log")
 
         try:
-            self.stream_from_llm_api()
+            self.llm_worker = self.stream_from_llm_api()
         except APIConnectionError:
             self.notify("Error connecting to LLM API.", severity="error")
 
@@ -64,9 +65,6 @@ async def _stream_from_llm_api(widget: LLMResponse, ctx: AgentContext):
     client = ctx.client
     tool_ctx = ToolCallContext()
     spawned_continuation = False
-
-    if widget.prompt is None:
-        return
 
     ctx.append_message("user", widget.prompt)
 
@@ -90,7 +88,7 @@ async def _stream_from_llm_api(widget: LLMResponse, ctx: AgentContext):
 
         # widget.parent will be VerticalScroll
         # Every text chunk will force the scroll to go down
-        widget.parent.scroll_end()
+        # widget.parent.scroll_end()
 
         if ctx.debug_mode:
             ctx.log(str(event))
@@ -210,7 +208,7 @@ async def _stream_from_llm_api(widget: LLMResponse, ctx: AgentContext):
                 })
 
                 # spawned_continuation = True
-                # await widget.parent.mount(LLMResponse(None, widget.mode))
+                await widget.parent.mount(LLMResponse(None, ctx))
 
     # TODO: this is where plugin on_turn_end should be called
     # if not spawned_continuation:

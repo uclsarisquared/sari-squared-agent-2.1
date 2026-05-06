@@ -1,26 +1,20 @@
 import asyncio
-from utils.utils import AgentPlugin, AgentContext
+from utils.utils import AgentPlugin, AgentContext, ToolDefinition
 
 class DebugTools(AgentPlugin):
     PLUGIN_NAME = "Debug Tools v1.0"
     AGENT_TOOLS = [
-        {
-            "type": "function",
-            "name": "SAMPLE_MOVE_FWD",
-            "description": "Walk forward x units in Sari Sandbox.",
-            "strict": True,
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "meters": {
-                        "type": "integer",
-                        "description": "The amount of units the embodied agent will move forward in the sandbox.",
-                    },
+        ToolDefinition(
+            name="SAMPLE_MOVE_FWD",
+            description="Walk forward x units in Sari Sandbox.",
+            input_arguments={
+                "meters": {
+                    "type": "integer",
+                    "description": "The amount of units the embodied agent will move forward in the Sandbox.",
                 },
-                "required": ["meters"],
-                "additionalProperties": False
             },
-        },
+            required_arguments=["meters"],
+        )
     ]
     SYSTEM_PROMPT = """
     Please warn the user that debug tools are loaded, as these tools are
