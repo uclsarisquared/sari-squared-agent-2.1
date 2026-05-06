@@ -54,7 +54,7 @@ class AgentContext:
             self.reload_system_prompt()
             self.reload_tools()
 
-    def inherit_plugins(self, context: AgentContext) -> None:
+    def inherit_plugins(self, context: "AgentContext") -> None:
         self.plugins = context.plugins
         self.reload_system_prompt()
         self.reload_tools()
@@ -121,7 +121,27 @@ class AgentContext:
                 setup_func = getattr(module, 'setup')
                 self.plugins.append(setup_func(self))
 
+@dataclass
+class ToolDefinition:
+    name: str
+    description: str
+    input_arguments: dict[str, Any]
+    required_arguments: list[str]
+    strict: bool = True
 
+    def to_dict(self) -> dict:
+        return {
+            "type": "function",
+            "name": self.name,
+            "description": self.description,
+            "parameters": {
+                "type": "object",
+                "properties": self.input_arguments,
+                "required": self.required_arguments,
+                "additionalProperties": False,
+            },
+            "strict": self.strict,
+        }
 
 class AgentPlugin(ABC):
     @property
