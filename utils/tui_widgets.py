@@ -1,10 +1,10 @@
-
-from textual import on
+from textual import on, events
 from textual.app import ComposeResult
 from textual.containers import VerticalGroup, HorizontalGroup, VerticalScroll
-from textual.widgets import Markdown, LoadingIndicator, Collapsible, Label, Input, Static
+from textual.widgets import Markdown, LoadingIndicator, Collapsible, Label, Input, Static, RichLog
 from textual.suggester import SuggestFromList
 from agent_tools3 import load_semantic_memory
+from utils.utils import AgentContext
 
 COMMAND_LIST = [
     "/subagents enable",
@@ -22,7 +22,6 @@ Enter a prompt below. Use /<command> to run a command. Available commands are:
 - `/subagents` enable/disable
 - `/effort` high/medium/low/none
 """
-
 
 class LLMThinkingSummary(VerticalGroup):
 
@@ -50,15 +49,16 @@ class LLMToolCallDisplay(VerticalGroup):
     def on_mount(self):
         self.border_title = self.tool_name
 
-    def update_func_args(self, args: str) -> None:
+    def update_display_header(self, args: str) -> None:
         self.border_title += args
 
     def compose(self) -> ComposeResult:
         yield LoadingIndicator()
         yield Label("OK")
-        self.add_class("tool_success")
 
-    def tool_done(self):
+    def tool_done(self, resp: str):
+        self.add_class("tool_success")
+        self.query_one(Label).content = resp
         self.query_one(LoadingIndicator).display = False
 
 
@@ -71,52 +71,104 @@ class UserPrompt(HorizontalGroup):
         super().__init__()
 
     def compose(self) -> ComposeResult:
-        yield Markdown(markdown="❯ " + self.prompt, id="user_prompt")
+        yield Static(content=" ❯", id="input_arrow")
+        yield Markdown(markdown=self.prompt, id="user_prompt")
 
 
 class MemoryDisplay(HorizontalGroup):
     """Shows a live count of stored semantic memory facts."""
+
+    def __init__(self, ctx: AgentContext) -> None:
+        self.ctx = ctx
+        super().__init__()
 
     def compose(self) -> ComposeResult:
         count = len(load_semantic_memory())
         yield Label(f"Semantic memory: {count} fact(s)", id="memory_display")
 
     def refresh_count(self) -> None:
+        # TODO: should use ctx.metadata
         count = len(load_semantic_memory())
         self.query_one("#memory_display", Label).update(f"Semantic memory: {count} fact(s)")
 
 
 class ModeDisplay(HorizontalGroup):
 
+    def __init__(self, ctx: AgentContext) -> None:
+        self.ctx = ctx
+        super().__init__()
+
     def compose(self) -> ComposeResult:
-        import sari_tui
-        yield Label(f"Agent mode: {sari_tui.current_mode}", id="mode_display")
+        yield Label(f"Agent mode: {self.ctx.metadata['current_mode']}", id="mode_display")
 
     def update_mode(self, mode: str) -> None:
+        # TODO: should use ctx.metadata
         self.query_one("#mode_display", Label).update(f"Agent mode: {mode}")
         self.app.query_one(MemoryDisplay).refresh_count()
 
 
-class LLMInput(HorizontalGroup):
+class LoadingIcon(Label):
+    SPINNER_ICONS = ["·", "✻", "✽", "✶", "✳", "✢"]
+    __spinner_idx = 0
+    __spinner_timer = None
+
+    def compose(self) -> ComposeResult:
+        yield Label("·", id="spinner_icon")
+
+    def on_mount(self) -> None:
+        self.__spinner_timer = self.set_interval(
+            0.5,
+            self.update_spinner,
+            name="spinner"
+        )
+
+    def stop_spinner(self):
+        self.__spinner_timer.pause()
+        label = self.query_one(Label)
+        label.content = "⏺"
+        label.add_class("spinner_done")
+
+
+    def update_spinner(self) -> None:
+        self.query_one(Label).content = self.SPINNER_ICONS[
+            self.__spinner_idx
+        ]
+        self.__spinner_idx = (self.__spinner_idx + 1) % len(self.SPINNER_ICONS)
+
+
+
+class LLMUserInput(HorizontalGroup):
+
+    def __init__(self, ctx: AgentContext) -> None:
+        self.ctx = ctx
+        super().__init__()
 
     @on(Input.Submitted)
     def on_button_pressed(self) -> None:
-        import sari_tui
+        from .llm_streaming import LLMResponse
         user_input = self.query_one(Input).value
 
         if not user_input:
             return
 
-        self.parent.query_one(VerticalScroll).mount(UserPrompt(user_input))
+        # self.parent is the main app
+        vscroll = self.parent.query_one("#user_llm_screen", VerticalScroll)
+        vscroll.mount(UserPrompt(user_input))
         self.parent.sub_title = user_input
         self.query_one(Input).value = ""
-        self.parent.query_one(VerticalScroll).mount(sari_tui.LLMResponse(user_input, sari_tui.current_mode))
+        vscroll.mount(
+            LLMResponse(
+                user_input, self.ctx
+            )
+        )
+
+        # Force scrolls down
+        vscroll.scroll_end()
 
     def compose(self) -> ComposeResult:
-        import sari_tui
         yield Static(content="❯", id="input_arrow")
         yield Input(
-            placeholder=f"Send prompt to {sari_tui.MODEL_NAME}...",
+            placeholder=f"Send prompt to {self.ctx.model_name}...",
             suggester=SuggestFromList(COMMAND_LIST),
             compact=True,
             id="input_text"

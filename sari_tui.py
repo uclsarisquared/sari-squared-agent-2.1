@@ -1,22 +1,21 @@
-from textual import work
-from openai import AsyncOpenAI, APIConnectionError
+from openai import AsyncOpenAI
 from textual.app import App, ComposeResult
-from textual.containers import VerticalGroup, VerticalScroll, HorizontalGroup
-from textual.widgets import Markdown, LoadingIndicator, RichLog, Label, Static, TabbedContent, TabPane
+from textual.containers import VerticalScroll, HorizontalGroup
+from textual.widgets import TabbedContent, TabPane, RichLog
 from agent_tools3 import (NAVIGATION_TOOLS, MANIPULATION_TOOLS, PERCEPTION_TOOLS,
                            MEMORY_TOOLS, SWITCH_MODE_TOOL)
-from utils.utils import SARI_THEME
-from utils.llm_streaming import stream_from_llm_api as _stream_from_llm_api
-import os
+from utils.utils import SARI_THEME, AgentContext, read_markdown
 from utils.tui_widgets import (
-    LLMThinkingSummary, LLMToolCallDisplay, UserPrompt,
-    MemoryDisplay, ModeDisplay, LLMInput, WelcomeHeader,
+    MemoryDisplay, ModeDisplay, LLMUserInput, WelcomeHeader,
 )
+import os
 
 # Configuration
 DEBUG = False
-MODEL_NAME = "qwen/qwen3.5-27b"
-# MODEL_NAME = "deepseek/deepseek-v4-flash"
+# MODEL_NAME = "qwen/qwen3.5-27b"
+MODEL_NAME = "deepseek/deepseek-v4-flash"
+PLUGIN_DIR = "plugins"
+BASE_PROMPT = read_markdown("memory/SARI.md")
 
 ALL_TOOLS = NAVIGATION_TOOLS + MANIPULATION_TOOLS + PERCEPTION_TOOLS + MEMORY_TOOLS + [SWITCH_MODE_TOOL]
 # ALL_TOOLS = []
@@ -28,61 +27,39 @@ client = AsyncOpenAI(
     api_key=os.environ['SARI_OPENROUTER_API_KEY']
 )
 
-chat_log = []
-
-class LLMResponse(VerticalGroup):
-
-    BORDER_TITLE = MODEL_NAME
-
-    def __init__(self, prompt: str | None, mode: str = "navigation") -> None:
-        self.prompt = prompt
-        self.mode = mode
-        super().__init__()
-
-    def compose(self) -> ComposeResult:
-        yield LoadingIndicator()
-
-        llm_thinking = LLMThinkingSummary()
-        llm_thinking.display = False
-        yield llm_thinking
-
-        with HorizontalGroup():
-            yield Static("⏺", id="llm_resp_bullet")
-            with VerticalGroup():
-                yield Markdown(id="llm_response_text")
-                yield Label("↑ ... Tok | ↓ ... Tok", id="token_usage_label")
-
-        if DEBUG:
-            yield RichLog(highlight=True, id="raw_log")
-
-        try:
-            self.stream_from_llm_api()
-        except APIConnectionError:
-            self.notify("Error connecting to LLM API.", severity="error")
-
-    @work(exclusive=True)
-    async def stream_from_llm_api(self):
-        def _set_mode(mode: str):
-            global current_mode
-            current_mode = mode
-
-        await _stream_from_llm_api(self, client, MODEL_NAME, chat_log, ALL_TOOLS, DEBUG, _set_mode)
-
 
 class SariApp(App):
 
     TITLE = "Sari Term"
     CSS_PATH = "sari_tui.tcss"
 
+    def __init__(self):
+        self.ctx = AgentContext(
+            base_system_prompt=BASE_PROMPT,
+            model_name=MODEL_NAME,
+            thinking_effort="low",
+            client=client,
+            main_app=self,
+            plugin_dir=PLUGIN_DIR,
+            metadata={
+                'current_mode': 'navigation',
+            }
+        )
+
+        super().__init__()
+
     def compose(self) -> ComposeResult:
         # yield Header()
-        with TabbedContent():
-            with TabPane("Main Agent"):
+        with TabbedContent(initial="main_agent"):
+            with TabPane("🔍", id="debug_log_pane"):
+                yield RichLog(highlight=True, id="debug_log")
+            with TabPane("Main Agent", id="main_agent"):
                 yield VerticalScroll(id="user_llm_screen")
-                with HorizontalGroup():
-                    yield MemoryDisplay()
-                    yield ModeDisplay()
-                yield LLMInput()
+                with HorizontalGroup(id="plugin_debug_display"):
+                    pass
+                    # yield MemoryDisplay(self.ctx)
+                    # yield ModeDisplay(self.ctx)
+                yield LLMUserInput(self.ctx)
 
     def on_mount(self) -> None:
         self.sub_title = ""

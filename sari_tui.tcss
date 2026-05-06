@@ -16,11 +16,22 @@ UserPrompt {
     align-vertical: middle;
     padding-top: 1;
     color: white;
-    align-horizontal: right;
+    align-horizontal: left;
 }
 
 #user_prompt {
     color: white;
+    margin-right: 5;
+    margin-left: 0;
+    offset-x: -1;
+}
+
+#spinner_icon {
+    opacity: 50%;
+}
+
+.spinner_done {
+    opacity: 100%;
 }
 
 LLMToolCallDisplay {
@@ -28,6 +39,7 @@ LLMToolCallDisplay {
     border-title-align: center;
     height: 3;
     align: center middle;
+    margin-bottom: 1;
 }
 
 LLMThinkingSummary {
@@ -35,7 +47,6 @@ LLMThinkingSummary {
 }
 
 #user_llm_screen {
-    layout: vertical;
     scrollbar-size: 1 1;
 }
 
@@ -83,7 +94,7 @@ LLMResponse {
     align: right middle;
 }
 
-LLMInput {
+LLMUserInput {
     border: hkey $foreground;
     padding: 0;
     height: 3;
@@ -110,6 +121,10 @@ WelcomeHeader {
 }
 
 .tool_success {
-    color: $success;
-    border: panel $success;
+    color: $accent;
+    border: panel $accent;
+}
+
+#debug_log {
+    background: #000000;
 }

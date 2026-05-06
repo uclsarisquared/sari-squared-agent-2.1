@@ -255,7 +255,7 @@ class ModeDisplay(HorizontalGroup):
 class LLMInput(HorizontalGroup):
 
     def on_button_pressed(self, event: Button) -> None:
-        if event.button.id == "enter_button":
+        if event.button.call_id == "enter_button":
             user_input = self.query_one(TextArea).text
 
             if not user_input:
