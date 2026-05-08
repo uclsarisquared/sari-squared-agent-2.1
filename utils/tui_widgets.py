@@ -169,14 +169,14 @@ class LLMUserInput(HorizontalGroup):
             return
 
         if user_input.startswith("/"):
+            parts = user_input[1:].split(" ")
+            root_cmd = parts[0]
+
             self.query_one(Input).value = ""
             self.ctx.main_app.query_one(
                 "#user_llm_screen",
                 VerticalScroll
-            ).mount(SlashCommandDisplay("/test", "hello world"))
-            return
-            # parts = user_input[1:].split(" ")
-            # root_cmd = parts[0]
+            ).mount(SlashCommandDisplay(f"/{root_cmd}", "hello world"))
             # if root_cmd in self.ctx.tui_command_handlers:
             #     handler, _ = self.ctx.tui_command_handlers[root_cmd]
             #     handler(parts[1:])
