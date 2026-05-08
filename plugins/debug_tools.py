@@ -2,10 +2,10 @@ import asyncio
 from utils.utils import AgentPlugin, AgentContext, ToolDefinition
 
 class DebugTools(AgentPlugin):
-    PLUGIN_NAME = "Debug Tools v1.0"
+    PLUGIN_NAME = "DebugTools"
     AGENT_TOOLS = [
         ToolDefinition(
-            name="SAMPLE_MOVE_FWD",
+            name="DUMMY_MOVE_FWD",
             description="Walk forward x units in Sari Sandbox.",
             input_arguments={
                 "meters": {
@@ -22,7 +22,7 @@ class DebugTools(AgentPlugin):
     """
 
     # Tool call handler be the same name as the tool, but all lowercase
-    async def sample_move_fwd(self, args: dict) -> dict:
+    async def dummy_move_fwd(self, args: dict) -> dict:
         await asyncio.sleep(3)
         self.ctx.log("Called move_fwd()")
         return {

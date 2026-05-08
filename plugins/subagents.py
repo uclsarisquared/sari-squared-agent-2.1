@@ -45,7 +45,7 @@ class Subagents(AgentPlugin):
             Spawns a sub-agent given a prompt and goal. 
             The agent reasons and calls tools in sequence, stopping only  
             when the goal condition is met or no further progress is possible.
-            Be sure to be as detailed as possible, especially with the end goal.
+            Be as detailed as possible, especially with the end goal.
             """,
             input_arguments={
                 "input_prompt": {
@@ -66,7 +66,7 @@ class Subagents(AgentPlugin):
         ToolDefinition(
             name="REPORT_TO_PARENT",
             description="""
-            ONLY CALL THIS TOOL IF YOU ARE A SUBAGENT.
+            ONLY CALL THIS TOOL IF YOU ARE A SUB-AGENT.
             Call this tool when your assigned goal is complete 
             or cannot be completed. Sends a structured summary back 
             to the parent agent. 

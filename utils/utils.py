@@ -44,6 +44,7 @@ class AgentContext:
 
         # PLUGIN-RELATED
         self.system_prompt: str = ""
+        self.tui_command_handlers: dict[str, Callable] = {}
 
         self.__widget_update_handlers: list[Callable] = []
         self.__tool_call_handlers: dict = {}
@@ -138,10 +139,9 @@ class AgentPlugin(ABC):
     @property
     @abstractmethod
     def SYSTEM_PROMPT(self) -> str:
-        """Base system prompt logic"""
+        """System prompt that gets appended to the base system prompt (SARI.md)"""
         pass
 
-    TUI_COMMAND_HANDLERS: dict[str, Callable] = {}
 
     def __init__(self, context: AgentContext):
         self.ctx = context
@@ -152,6 +152,14 @@ class AgentPlugin(ABC):
             tools.append(tooldef.to_dict())
         return tools
 
+    def slash_command(self, root_cmd: str):
+        def decorator(func):
+            def wrapper(*args, **kwargs):
+                self.ctx.tui_command_handlers[root_cmd] = func
+            return wrapper
+        return decorator
+
+
     async def on_start(self, context: AgentContext) -> None: pass
 
     async def on_turn_start(self, context: AgentContext) -> None: pass
@@ -160,6 +168,10 @@ class AgentPlugin(ABC):
                               context: AgentContext) -> None: pass
 
     async def on_turn_end(self, context: AgentContext) -> None: pass
+
+
+
+
 
 
 @dataclass
