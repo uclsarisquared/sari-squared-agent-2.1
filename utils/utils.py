@@ -30,13 +30,14 @@ class PluginManager:
         self.unloaded_plugins: list[AgentPlugin] = []
         self.system_prompt: str = base_system_prompt
         self.tools: list[dict] = []
-        self.tui_command_handlers: dict[str, tuple[Callable, dict]] = {}
+        self.slash_command_handlers: dict[str, Callable] = {}
         self.__tool_call_handlers: dict = {}
 
         if plugin_dir and context is not None:
             self._load_plugins(plugin_dir, plugins, context)
             self.reload_system_prompt()
             self.reload_tools()
+            self.reload_slash_commands()
 
     def _load_plugins(self, directory_name: str, plugins: list[str] | None, context: AgentContext) -> None:
         folder = pathlib.Path(directory_name)
@@ -74,21 +75,17 @@ class PluginManager:
                         "Is the tool handler's function name the same as the tool but lowercase?"
                     )
 
+    def reload_slash_commands(self) -> None:
+        for plugin in self.loaded_plugins:
+            for cmd in plugin.SLASH_COMMANDS:
+                self.slash_command_handlers[cmd] = getattr(plugin, cmd.lower())
+
     async def dispatch_tool(self, tool_name: str, args: dict) -> dict:
         return await self.__tool_call_handlers[tool_name](args)
 
-    def get_possible_commands(self) -> list[str]:
-        result = []
-        for root_cmd, (_, sub_cmds) in self.tui_command_handlers.items():
-            self._flatten_commands(f"/{root_cmd}", sub_cmds, result)
+    def get_possible_commands(self, include_slash=False) -> list[str]:
+        result = [("/" if include_slash else "") + key for key in self.slash_command_handlers.keys()]
         return result
-
-    def _flatten_commands(self, prefix: str, sub_cmds: dict, result: list) -> None:
-        if not sub_cmds:
-            result.append(prefix)
-            return
-        for key, nested in sub_cmds.items():
-            self._flatten_commands(f"{prefix} {key}", nested, result)
 
     def rebind_context(self, context: AgentContext) -> None:
         """Update every plugin's ctx reference."""
@@ -153,7 +150,7 @@ class AgentContext:
 
     @property
     def tui_command_handlers(self) -> dict:
-        return self.plugin_manager.tui_command_handlers if self.plugin_manager else {}
+        return self.plugin_manager.slash_command_handlers if self.plugin_manager else {}
 
     # --- Plugin management ---
 
@@ -171,10 +168,10 @@ class AgentContext:
     async def dispatch_tool(self, tool_name: str, args: dict) -> dict:
         return await self.plugin_manager.dispatch_tool(tool_name, args)
 
-    def get_possible_commands(self) -> list[str]:
-        return self.plugin_manager.get_possible_commands() if self.plugin_manager else []
+    def get_possible_commands(self, include_slash=False) -> list[str]:
+        return self.plugin_manager.get_possible_commands(include_slash) if self.plugin_manager else []
 
-    # --- Messaging ---
+    # --- Agent message log appending ---
 
     def append_message(self, role: str, message) -> None:
         self.append_msg_raw({"role": role, "content": message})
@@ -216,6 +213,7 @@ class AgentPlugin(ABC):
         """System prompt that gets appended to the base system prompt (SARI.md)"""
         pass
 
+    SLASH_COMMANDS = []
 
     def __init__(self, context: AgentContext):
         self.ctx = context
@@ -226,13 +224,6 @@ class AgentPlugin(ABC):
             tools.append(tooldef.to_dict())
         return tools
 
-    def slash_command(self, root_cmd: str, sub_cmds: dict = None):
-        def decorator(func):
-            self.ctx.tui_command_handlers[root_cmd] = (func, sub_cmds or {})
-            return func
-        return decorator
-
-
     async def on_start(self, context: AgentContext) -> None: pass
 
     async def on_turn_start(self, context: AgentContext) -> None: pass
@@ -241,10 +232,6 @@ class AgentPlugin(ABC):
                               context: AgentContext) -> None: pass
 
     async def on_turn_end(self, context: AgentContext) -> None: pass
-
-
-
-
 
 
 @dataclass

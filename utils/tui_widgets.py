@@ -1,27 +1,12 @@
+import json
+
 from textual import on, events
 from textual.app import ComposeResult
 from textual.containers import VerticalGroup, HorizontalGroup, VerticalScroll
-from textual.widgets import Markdown, LoadingIndicator, Collapsible, Label, Input, Static, RichLog
+from textual.widgets import Markdown, LoadingIndicator, Collapsible, Label, Input, Static, RichLog, Pretty
 from textual.suggester import SuggestFromList
 from agent_tools3 import load_semantic_memory
 from utils.utils import AgentContext
-
-COMMAND_LIST = [
-    "/subagents enable",
-    "/subagents disable",
-    "/effort medium",
-    "/effort low",
-    "/effort high",
-    "/effort none",
-]
-
-WELCOME_TEXT = """
-# Let's shop.
-
-Enter a prompt below. Use /<command> to run a command. Available commands are:
-- `/subagents` enable/disable
-- `/effort` high/medium/low/none
-"""
 
 class LLMThinkingSummary(VerticalGroup):
 
@@ -42,6 +27,8 @@ class LLMThinkingSummary(VerticalGroup):
 
 class LLMToolCallDisplay(VerticalGroup):
 
+    CUT_OFF_LIMIT = 1000
+
     def __init__(self, tool_name: str) -> None:
         self.tool_name = tool_name
         super().__init__()
@@ -54,11 +41,11 @@ class LLMToolCallDisplay(VerticalGroup):
 
     def compose(self) -> ComposeResult:
         yield LoadingIndicator()
-        yield Label("OK")
+        yield Pretty("OK")
 
-    def tool_done(self, resp: str):
+    def tool_done(self, resp: dict):
         self.add_class("tool_success")
-        self.query_one(Label).content = resp
+        self.query_one(Pretty).update(resp)
         self.query_one(LoadingIndicator).display = False
 
 
@@ -161,7 +148,7 @@ class LLMUserInput(HorizontalGroup):
         super().__init__()
 
     @on(Input.Submitted)
-    def on_button_pressed(self) -> None:
+    async def on_button_pressed(self) -> None:
         from .llm_streaming import LLMResponse
         user_input = self.query_one(Input).value
 
@@ -173,21 +160,25 @@ class LLMUserInput(HorizontalGroup):
             root_cmd = parts[0]
 
             self.query_one(Input).value = ""
-            self.ctx.main_app.query_one(
+            if root_cmd in self.ctx.tui_command_handlers:
+                handler = self.ctx.tui_command_handlers[root_cmd]
+                resp = await handler(parts[1:])
+            else:
+                resp = f"Unknown command: /{root_cmd}"
+            await self.ctx.main_app.query_one(
                 "#user_llm_screen",
                 VerticalScroll
-            ).mount(SlashCommandDisplay(f"/{root_cmd}", "hello world"))
-            # if root_cmd in self.ctx.tui_command_handlers:
-            #     handler, _ = self.ctx.tui_command_handlers[root_cmd]
-            #     handler(parts[1:])
-            #     return
+            ).mount(
+                SlashCommandDisplay(f"/{root_cmd}", resp)
+            )
+            return
 
         # self.parent is the main app
         vscroll = self.parent.query_one("#user_llm_screen", VerticalScroll)
-        vscroll.mount(UserPrompt(user_input))
+        await vscroll.mount(UserPrompt(user_input))
         self.parent.sub_title = user_input
         self.query_one(Input).value = ""
-        vscroll.mount(
+        await vscroll.mount(
             LLMResponse(
                 user_input, self.ctx
             )
@@ -200,15 +191,33 @@ class LLMUserInput(HorizontalGroup):
         yield Static(content="❯", id="input_arrow")
         yield Input(
             placeholder=f"Send prompt to {self.ctx.model_name}...",
-            suggester=SuggestFromList(self.ctx.get_possible_commands()),
+            suggester=SuggestFromList(self.ctx.get_possible_commands(include_slash=True)),
             compact=True,
             id="input_text"
         )
 
 
+WELCOME_TEXT = """
+# Let's shop.
+
+Enter a prompt below. Use /<command> to run a command. Available commands are:
+"""
+
 class WelcomeHeader(VerticalGroup):
 
     BORDER_TITLE = "Sari Term v1.0"
 
+    def __init__(self, ctx: AgentContext) -> None:
+        self.ctx = ctx
+        super().__init__()
+
     def compose(self) -> ComposeResult:
-        yield Markdown(markdown=WELCOME_TEXT, id="welcome_header")
+        global WELCOME_TEXT
+
+        for cmd in self.ctx.get_possible_commands():
+            WELCOME_TEXT += f"- `/{cmd}`\n"
+
+        yield Markdown(
+            markdown=WELCOME_TEXT,
+            id="welcome_header"
+        )

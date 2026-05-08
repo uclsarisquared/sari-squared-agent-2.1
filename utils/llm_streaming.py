@@ -31,6 +31,7 @@ class LLMResponse(VerticalGroup):
 
     def compose(self) -> ComposeResult:
         yield LoadingIndicator()
+        yield Rule(line_style="dashed", id="response_rule")
 
         llm_thinking = LLMThinkingSummary()
         llm_thinking.display = False
@@ -49,7 +50,6 @@ class LLMResponse(VerticalGroup):
         # if self.ctx.debug_mode:
         #     yield RichLog(highlight=True, id="raw_log")
 
-        yield Rule(line_style="dashed", id="response_rule")
 
         try:
             self.llm_worker = self.stream_from_llm_api()
@@ -149,7 +149,9 @@ async def _stream_from_llm_api(widget: LLMResponse, ctx: AgentContext):
                 # accumulating, and we will have a full JSON to parse
                 # Sample response: {"units": 5}
                 args = json.loads(tool_ctx.deltas)
-                tool_ctx.display.update_display_header(tool_ctx.deltas)
+
+                if ctx.debug_mode:
+                    tool_ctx.display.update_display_header(tool_ctx.deltas)
 
                 # Reset tool_call_deltas
                 tool_ctx.deltas = ""
@@ -165,7 +167,7 @@ async def _stream_from_llm_api(widget: LLMResponse, ctx: AgentContext):
                 result = await ctx.dispatch_tool(tool_ctx.name, args)
 
                 # Make tool call display stop the loading animation
-                tool_ctx.display.tool_done(str(result))
+                tool_ctx.display.tool_done(result)
 
                 append_tool_result_to_chat_log(result, ctx, tool_ctx)
 

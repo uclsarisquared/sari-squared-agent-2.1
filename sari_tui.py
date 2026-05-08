@@ -70,7 +70,7 @@ class SariApp(App):
         self.sub_title = ""
         self.register_theme(SARI_THEME)
         self.theme = "sari"
-        self.query_one(VerticalScroll).mount(WelcomeHeader())
+        self.query_one(VerticalScroll).mount(WelcomeHeader(self.ctx))
 
 
 if __name__ == "__main__":

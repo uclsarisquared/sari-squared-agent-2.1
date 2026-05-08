@@ -37,7 +37,7 @@ stop all activity immediately. Do not call any other tool after it.
 #   than looping indefinitely.
 
 class Subagents(AgentPlugin):
-    PLUGIN_NAME = "Subagents"
+    PLUGIN_NAME = "subagents"
     AGENT_TOOLS = [
         ToolDefinition(
             name="spawn_subagent",
@@ -145,7 +145,10 @@ class Subagents(AgentPlugin):
         sid = args["subagent_id"]
 
         if sid in self.subagent_finished_tracker:
-            return {"success": False, "message": f"Conflicting agent ID {sid}. Make sure agent ID's are unique."}
+            return {
+                "success": False,
+                "message": f"Conflicting agent ID {sid}. Make sure agent ID's are unique."
+            }
 
         self.subagent_finished_tracker[sid] = asyncio.Event()
 

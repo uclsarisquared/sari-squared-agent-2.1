@@ -2,7 +2,7 @@ import asyncio
 from utils.utils import AgentPlugin, AgentContext, ToolDefinition
 
 class DebugTools(AgentPlugin):
-    PLUGIN_NAME = "Debug Tools"
+    PLUGIN_NAME = "debug_tools"
     AGENT_TOOLS = [
         ToolDefinition(
             name="DUMMY_MOVE_FWD",
@@ -16,6 +16,9 @@ class DebugTools(AgentPlugin):
             required_arguments=["meters"],
         )
     ]
+    SLASH_COMMANDS = [
+        "print_raw_messages"
+    ]
     SYSTEM_PROMPT = """
     Please warn the user that debug tools are loaded, as these tools are
     made for internal development rather than Sari Agent usage.
@@ -28,6 +31,10 @@ class DebugTools(AgentPlugin):
         return {
             "status": f"move {args['meters']}m success",
         }
+
+    async def print_raw_messages(self, args: list[str]) -> str:
+        self.ctx.log(str(self.ctx.messages))
+        return "Successfully logged."
 
 def setup(context) -> AgentPlugin:
     return DebugTools(context)
