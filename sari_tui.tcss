@@ -11,6 +11,13 @@ LLMInput {
     dock: bottom;
 }
 
+#response_rule {
+    padding-top: 0;
+    margin-top: 0;
+    margin-bottom: 1;
+    opacity: 50%;
+}
+
 UserPrompt {
     background: #1f1f1f;
     align-vertical: middle;
@@ -36,7 +43,7 @@ UserPrompt {
 
 LLMToolCallDisplay {
     border: panel $secondary-muted;
-    border-title-align: center;
+    border-title-align: left;
     height: 3;
     align: center middle;
     margin-bottom: 1;
@@ -44,6 +51,7 @@ LLMToolCallDisplay {
 
 LLMThinkingSummary {
     margin: 0;
+    padding-top: 0;
 }
 
 #user_llm_screen {
@@ -127,4 +135,35 @@ WelcomeHeader {
 
 #debug_log {
     background: #000000;
+}
+
+/* SLASH COMMANDS */
+
+SlashCommandDisplay {
+    padding-bottom: 1;
+}
+
+#slash_command_display {
+    background: $background-lighten-3;
+}
+
+#slash_command_arrow {
+    width: 2;
+    opacity: 50%;
+}
+
+#slash_cmd_output {
+    padding-left: 2;
+}
+
+#slash_cmd_dd {
+    width: 2;
+}
+
+#slash_cmd_out {
+    padding-left: 1;
+}
+
+#slash_cmd_text {
+    color: white;
 }

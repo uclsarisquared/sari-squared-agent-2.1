@@ -4,7 +4,7 @@ from textual import work
 from textual.app import ComposeResult
 from textual.containers import VerticalScroll, VerticalGroup, HorizontalGroup
 from agent_tools3 import dispatch_tool, TOOL_MODE_MAP
-from textual.widgets import LoadingIndicator, RichLog, Markdown, Label, Static
+from textual.widgets import LoadingIndicator, RichLog, Markdown, Label, Static, Rule
 from utils.agent_utils import build_system_instruction, append_to_chat_log, synthesize_episodic_memory
 from utils.utils import AgentContext
 from dataclasses import dataclass
@@ -48,6 +48,8 @@ class LLMResponse(VerticalGroup):
 
         # if self.ctx.debug_mode:
         #     yield RichLog(highlight=True, id="raw_log")
+
+        yield Rule(line_style="dashed", id="response_rule")
 
         try:
             self.llm_worker = self.stream_from_llm_api()

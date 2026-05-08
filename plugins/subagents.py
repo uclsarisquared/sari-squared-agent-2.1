@@ -15,7 +15,7 @@ You have been spawned by a parent agent to complete a single, clearly defined go
 ## Behavior
 - Focus exclusively on your assigned goal. Do not deviate.
 - Use available tools as needed to gather information or take actions.
-- When your goal is complete, call the `REPORT_TO_PARENT` tool with a 
+- When your goal is complete, call the `report_to_parent` tool with a 
 structured summary of your findings.
 - Call `report_to_parent` exactly once. It is a terminal action — once called, 
 stop all activity immediately. Do not call any other tool after it.
@@ -40,7 +40,7 @@ class Subagents(AgentPlugin):
     PLUGIN_NAME = "Subagents"
     AGENT_TOOLS = [
         ToolDefinition(
-            name="SPAWN_SUBAGENT",
+            name="spawn_subagent",
             description="""
             Spawns a sub-agent given a prompt and goal. 
             The agent reasons and calls tools in sequence, stopping only  
@@ -64,7 +64,7 @@ class Subagents(AgentPlugin):
             required_arguments=["input_prompt", "goal_prompt"],
         ),
         ToolDefinition(
-            name="REPORT_TO_PARENT",
+            name="report_to_parent",
             description="""
             ONLY CALL THIS TOOL IF YOU ARE A SUB-AGENT.
             Call this tool when your assigned goal is complete 
@@ -124,7 +124,8 @@ class Subagents(AgentPlugin):
             metadata={}
         )
         self.sub_ctx.inherit_plugins(self.ctx)
-        self.ctx.log(f"Subagent sees {len(self.sub_ctx.plugins)} plugins and {len(self.sub_ctx.tools)} tools.")
+        pm = self.sub_ctx.plugin_manager
+        self.ctx.log(f"Subagent {args['subagent_id']} sees {len(pm.loaded_plugins)} loaded, {len(pm.unloaded_plugins)} unloaded plugins and {len(self.sub_ctx.tools)} tools.")
 
         # Setup sub-agents TabPane
         initial_prompt = f"{args['input_prompt']}\n\n**END GOAL:** {args['goal_prompt']}\n\nYour subagent ID is: `{args['subagent_id']}`"
@@ -160,6 +161,12 @@ class Subagents(AgentPlugin):
     async def report_to_parent(self, args: dict) -> dict:
         sid = args["subagent_id"]
         self.subagent_results[sid] = args
+        if sid not in self.subagent_finished_tracker:
+            return {
+                "success": False,
+                "message": "Unknown agent ID. Are you sure that's yours?"
+            }
+
         self.subagent_finished_tracker[sid].set()
 
         # llm_worker = self.tab_pane.query_one(LLMResponse).llm_worker

@@ -47,7 +47,7 @@ class LLMToolCallDisplay(VerticalGroup):
         super().__init__()
 
     def on_mount(self):
-        self.border_title = self.tool_name
+        self.border_title = "🛠️ " + self.tool_name
 
     def update_display_header(self, args: str) -> None:
         self.border_title += args
@@ -136,6 +136,23 @@ class LoadingIcon(Label):
         self.__spinner_idx = (self.__spinner_idx + 1) % len(self.SPINNER_ICONS)
 
 
+class SlashCommandDisplay(HorizontalGroup):
+
+    def __init__(self, command, cmd_output) -> None:
+        self.command = command
+        self.cmd_output = cmd_output
+        super().__init__()
+
+    def compose(self) -> ComposeResult:
+        with VerticalGroup():
+            with HorizontalGroup(id="slash_command_display"):
+                yield Static("❯", id="slash_command_arrow")
+                yield Label(self.command, id="slash_cmd_text")
+            with HorizontalGroup(id="slash_cmd_output"):
+                yield Static("⎿", id="slash_cmd_dd")
+                yield Label(self.cmd_output, id="slash_cmd_out")
+
+
 
 class LLMUserInput(HorizontalGroup):
 
@@ -150,6 +167,20 @@ class LLMUserInput(HorizontalGroup):
 
         if not user_input:
             return
+
+        if user_input.startswith("/"):
+            self.query_one(Input).value = ""
+            self.ctx.main_app.query_one(
+                "#user_llm_screen",
+                VerticalScroll
+            ).mount(SlashCommandDisplay("/test", "hello world"))
+            return
+            # parts = user_input[1:].split(" ")
+            # root_cmd = parts[0]
+            # if root_cmd in self.ctx.tui_command_handlers:
+            #     handler, _ = self.ctx.tui_command_handlers[root_cmd]
+            #     handler(parts[1:])
+            #     return
 
         # self.parent is the main app
         vscroll = self.parent.query_one("#user_llm_screen", VerticalScroll)
@@ -169,7 +200,7 @@ class LLMUserInput(HorizontalGroup):
         yield Static(content="❯", id="input_arrow")
         yield Input(
             placeholder=f"Send prompt to {self.ctx.model_name}...",
-            suggester=SuggestFromList(COMMAND_LIST),
+            suggester=SuggestFromList(self.ctx.get_possible_commands()),
             compact=True,
             id="input_text"
         )

@@ -2,7 +2,7 @@ import asyncio
 from utils.utils import AgentPlugin, AgentContext, ToolDefinition
 
 class DebugTools(AgentPlugin):
-    PLUGIN_NAME = "DebugTools"
+    PLUGIN_NAME = "Debug Tools"
     AGENT_TOOLS = [
         ToolDefinition(
             name="DUMMY_MOVE_FWD",

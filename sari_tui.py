@@ -15,6 +15,10 @@ DEBUG = False
 # MODEL_NAME = "qwen/qwen3.5-27b"
 MODEL_NAME = "deepseek/deepseek-v4-flash"
 PLUGIN_DIR = "plugins"
+LOAD_PLUGINS = [
+    "debug_tools",
+    "subagents"
+]
 BASE_PROMPT = read_markdown("memory/SARI.md")
 
 ALL_TOOLS = NAVIGATION_TOOLS + MANIPULATION_TOOLS + PERCEPTION_TOOLS + MEMORY_TOOLS + [SWITCH_MODE_TOOL]
@@ -41,6 +45,7 @@ class SariApp(App):
             client=client,
             main_app=self,
             plugin_dir=PLUGIN_DIR,
+            plugins=LOAD_PLUGINS,
             metadata={
                 'current_mode': 'navigation',
             }
